@@ -84,6 +84,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
   const [dateFrom, setDateFrom] = useState(new Date());
   const [dateTo, setDateTo] = useState(new Date());
   const [filter, setFilter] = useState<OrderStatus | null>(null);
+  const [chayCuaOnly, setChayCuaOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -110,7 +111,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     if (reset) { setLoading(true); setError(''); } else { setLoadingMore(true); }
     try {
       const data = await fetchOrders(
-        toISODate(dateFrom), toISODate(dateTo), pageNum, PAGE_SIZE, filter, debouncedSearch
+        toISODate(dateFrom), toISODate(dateTo), pageNum, PAGE_SIZE, filter, debouncedSearch, chayCuaOnly
       );
       if (myGen !== genRef.current) return; // kết quả cũ (bộ lọc đã đổi), bỏ qua
       setOrders((prev) => {
@@ -130,7 +131,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
   async function loadSummary() {
     try {
-      const c = await fetchOrderSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch);
+      const c = await fetchOrderSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly);
       setCounts(c);
     } catch {
       // im lặng bỏ qua lỗi tổng quan, không chặn danh sách chính
@@ -146,7 +147,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
   useEffect(() => {
     refresh();
-  }, [dateFrom, dateTo, filter, debouncedSearch]);
+  }, [dateFrom, dateTo, filter, debouncedSearch, chayCuaOnly]);
 
   function handleLoadMore() {
     if (loading || loadingMoreRef.current || !hasMore) return;
@@ -244,6 +245,8 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
             filter={filter}
             onChangeFilter={setFilter}
             counts={counts}
+            chayCuaOnly={chayCuaOnly}
+            onChangeChayCuaOnly={setChayCuaOnly}
           />
           <OrderDetailModal
             order={currentOrder}

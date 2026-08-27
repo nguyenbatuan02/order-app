@@ -15,11 +15,13 @@ export async function fetchOrders(
   page: number,
   pageSize: number,
   status?: string | null,
-  q?: string
+  q?: string,
+  chayCua?: boolean
 ): Promise<OrdersPage> {
   const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (q) params.set('q', q);
+  if (chayCua) params.set('chayCua', '1');
   const res = await fetch(`${API_BASE_URL}/api/orders/list?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -36,9 +38,10 @@ export interface StatusCounts {
   congno: number;
 }
 
-export async function fetchOrderSummary(from: string, to: string, q?: string): Promise<StatusCounts> {
+export async function fetchOrderSummary(from: string, to: string, q?: string, chayCua?: boolean): Promise<StatusCounts> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
+  if (chayCua) params.set('chayCua', '1');
   const res = await fetch(`${API_BASE_URL}/api/orders/summary?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

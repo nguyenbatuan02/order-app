@@ -35,12 +35,15 @@ interface Props {
   filter: OrderStatus | null;
   onChangeFilter: (f: OrderStatus | null) => void;
   counts: StatusCounts;
+  chayCuaOnly: boolean;
+  onChangeChayCuaOnly: (v: boolean) => void;
 }
 
 export default function OrderListScreen({
   orders, onOpen, loading, loadingMore, hasMore, total, error, dateFrom, dateTo,
   onChangeDateFrom, onChangeDateTo, onRetry, onLoadMore, onScanPress,
   currentUserName, onLogout, search, onChangeSearch, filter, onChangeFilter, counts,
+  chayCuaOnly, onChangeChayCuaOnly,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState<'from' | 'to' | null>(null);
 
@@ -102,6 +105,20 @@ export default function OrderListScreen({
               <Ionicons name="barcode-outline" size={22} color="#fff" />
             </Pressable>
           </View>
+
+          <Pressable
+            style={[styles.chayCuaToggle, chayCuaOnly && styles.chayCuaToggleActive]}
+            onPress={() => onChangeChayCuaOnly(!chayCuaOnly)}
+          >
+            <Ionicons
+              name={chayCuaOnly ? 'checkbox' : 'square-outline'}
+              size={18}
+              color={chayCuaOnly ? colors.amberText : colors.text3}
+            />
+            <Text style={[styles.chayCuaToggleText, chayCuaOnly && styles.chayCuaToggleTextActive]}>
+              Chỉ hiện đơn có hàng chạy cửa
+            </Text>
+          </Pressable>
 
           <Text style={styles.sectionLabel}>LỌC THEO KHOẢNG NGÀY</Text>
           <View style={styles.dateSearchRow}>
@@ -198,6 +215,10 @@ const styles = StyleSheet.create({
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 46 },
   searchInput: { flex: 1, fontSize: 14.5, color: colors.text },
   scanBtn: { width: 46, height: 46, borderRadius: radius, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
+  chayCuaToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 44, marginBottom: 22 },
+  chayCuaToggleActive: { backgroundColor: colors.amberBg, borderColor: colors.amber },
+  chayCuaToggleText: { fontSize: 13.5, color: colors.text2, fontWeight: '600' },
+  chayCuaToggleTextActive: { color: colors.amberText },
   sectionLabel: { fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, color: colors.text3, marginBottom: 12 },
   dateSearchRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   dateInput: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, paddingVertical: 8, height: 54, justifyContent: 'center' },

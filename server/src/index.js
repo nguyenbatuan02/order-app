@@ -309,6 +309,10 @@ app.get('/api/orders/summary', async (req, res) => {
   const toDate = isValidDate(to) ? to : from;
   const searchTerm = typeof q === 'string' ? q.trim() : '';
   const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
+  const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
+  const chayCuaClause = chayCuaOnly
+    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')`
+    : '';
 
   try {
     const pool = await getPool();
@@ -322,6 +326,7 @@ app.get('/api/orders/summary', async (req, res) => {
           AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
           AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
           ${searchClause}
+          ${chayCuaClause}
         GROUP BY h.DocStatus
       `);
 
