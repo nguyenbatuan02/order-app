@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import StatusGrid from './StatusGrid';
@@ -52,7 +52,7 @@ export default function FilterModal({
         </Pressable>
       </View>
 
-      <View style={styles.body}>
+      <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.sectionLabel}>KHOẢNG NGÀY</Text>
         <View style={styles.dateRow}>
           <Pressable style={styles.dateInput} onPress={() => setPickerOpen('from')}>
@@ -95,7 +95,7 @@ export default function FilterModal({
 
         <Text style={styles.sectionLabel}>TRẠNG THÁI</Text>
         <StatusGrid counts={counts} activeFilter={filter} onSelect={toggleFilter} />
-      </View>
+      </ScrollView>
 
       <View style={styles.foot}>
         <Pressable style={styles.clearBtn} onPress={onClearAll}>
@@ -113,7 +113,8 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   headTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   closeBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, backgroundColor: colors.bg, padding: 20 },
+  body: { flex: 1, backgroundColor: colors.bg },
+  bodyContent: { padding: 20, paddingBottom: 40 },
   sectionLabel: { fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, color: colors.text3, marginBottom: 12 },
   dateRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   dateInput: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, paddingVertical: 8, height: 54, justifyContent: 'center' },
