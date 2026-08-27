@@ -1,6 +1,6 @@
 import type { Order } from '../types/order';
 
-const API_BASE_URL = 'http://192.168.1.7:3001';
+const API_BASE_URL = 'http://161.248.80.30:3001';
 
 export interface OrdersPage {
   orders: Order[];
