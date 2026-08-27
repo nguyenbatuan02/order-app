@@ -146,6 +146,7 @@ function rowsToOrders(rows) {
       });
     }
     const order = ordersByDoc.get(row.DocNo);
+    const docStatus = row.DocStatus;
     order.items.push({
       rowId: row.RowId,
       itemCode: row.ItemCode,
@@ -155,15 +156,17 @@ function rowsToOrders(rows) {
       shelf: row.LocationCode || '—',
       type: 'noibo',
       price: row.UnitPrice,
-      done: !!row.Thoigiandonggoi,
+      done: docStatus >= 3 && !!row.Thoigiandonggoi,
     });
-    if (row.Thoigiankho) {
+    // Chỉ hiện các bước tiến trình khớp với DocStatus thực tế — DB có thể chứa timestamp
+    // "ảo" vượt quá trạng thái hiện tại (dữ liệu import/test cũ), không phản ánh đúng đã xảy ra.
+    if (docStatus >= 2 && row.Thoigiankho) {
       order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
     }
-    if (row.Thoigiandonggoi) {
+    if (docStatus >= 3 && row.Thoigiandonggoi) {
       order.log.push({ stage: 'donggoi', person: row.Nvdonggoi || '', time: fmtDateTime(row.Thoigiandonggoi) });
     }
-    if (row.Thoigianvanchuyen) {
+    if (docStatus >= 4 && row.Thoigianvanchuyen) {
       order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
     }
   }
