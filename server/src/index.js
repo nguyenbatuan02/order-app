@@ -117,12 +117,22 @@ function fmtDateTime(dt) {
 const ORDER_ROWS_SELECT = `
     h.Stt, h.DocNo, h.DocCode, h.BranchCode, h.DocDate, h.CreatedAt, h.DocStatus, h.CustomerCode,
     c.Name AS CustomerName, c.Tel AS CustomerTel, COALESCE(c.Address, h.Address2, '') AS CustomerAddress,
+    h.Goi_Vc, h.WarehouseCode AS HeaderWarehouseCode, w.Name AS HeaderWarehouseName,
     ct.RowId, ct.ItemCode, ct.Description, ct.Quantity, ct.UnitPrice, ct.LocationCode,
+    ct.WarehouseCode AS ItemWarehouseCode, wi.Name AS ItemWarehouseName,
     ct.Thoigiankho, ct.Nvkho, ct.Thoigiandonggoi, ct.Nvdonggoi, ct.Thoigianvanchuyen, ct.NvVanchuyen
   FROM B30AccDoc h
   JOIN B30AccDocSales ct ON ct.Stt = h.Stt
   LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
+  LEFT JOIN B20Warehouse w ON w.Code = h.WarehouseCode
+  LEFT JOIN B20Warehouse wi ON wi.Code = ct.WarehouseCode
 `;
+
+function shippingLabel(goiVc) {
+  if (goiVc === 'TH') return 'Giao thường';
+  if (goiVc === 'EX') return 'Giao nhanh';
+  return 'Khách đến lấy';
+}
 
 function rowsToOrders(rows) {
   const ordersByDoc = new Map();
@@ -141,6 +151,10 @@ function rowsToOrders(rows) {
         addr: row.CustomerAddress || '',
         time: fmtTime(row.CreatedAt),
         date: fmtDate(row.DocDate),
+        shipping: row.Goi_Vc || '',
+        shippingLabel: shippingLabel(row.Goi_Vc),
+        warehouseCode: row.HeaderWarehouseCode || '',
+        warehouseName: row.HeaderWarehouseName || row.HeaderWarehouseCode || '',
         items: [],
         log: [{ stage: 'tiepnhan', person: '', time: fmtDateTime(row.CreatedAt) }],
       });
@@ -150,6 +164,8 @@ function rowsToOrders(rows) {
     order.items.push({
       rowId: row.RowId,
       itemCode: row.ItemCode,
+      warehouseCode: row.ItemWarehouseCode || '',
+      warehouseName: row.ItemWarehouseName || row.ItemWarehouseCode || '',
       name: row.Description,
       sku: row.ItemCode,
       req: row.Quantity,

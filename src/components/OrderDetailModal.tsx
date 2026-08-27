@@ -82,6 +82,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
       <View style={{ flex: 1 }}>
         <Text style={styles.itemName}>{it.name}</Text>
         <Text style={styles.itemSub}>{it.sku} · Kệ {it.shelf}</Text>
+        {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
       </View>
       <View style={styles.qtyCol}>
         <Text style={styles.qtyLabel}>SL yêu cầu</Text>
@@ -282,6 +283,10 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             <Text style={styles.infoLabel}>Trạng thái</Text>
             <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />
           </View>
+          <View style={styles.infoItem}><Text style={styles.infoLabel}>Vận chuyển</Text><Text style={styles.infoValue}>{order.shippingLabel}</Text></View>
+          {!!order.warehouseName && (
+            <View style={styles.infoItem}><Text style={styles.infoLabel}>Kho</Text><Text style={styles.infoValue}>{order.warehouseName}</Text></View>
+          )}
         </View>
 
         <Text style={styles.sectionLabel}>Tiến trình xử lý</Text>

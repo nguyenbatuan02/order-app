@@ -10,6 +10,8 @@ export interface OrderItem {
   type: ItemType;
   price: number;
   done: boolean;
+  warehouseCode: string;
+  warehouseName: string;
 }
 
 export interface LogEntry {
@@ -30,6 +32,10 @@ export interface Order {
   addr: string;
   time: string;
   date: string;
+  shipping: string;
+  shippingLabel: string;
+  warehouseCode: string;
+  warehouseName: string;
   items: OrderItem[];
   log: LogEntry[];
 }

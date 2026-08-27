@@ -4,13 +4,16 @@ import { colors, colorSets } from '../theme';
 import { Badge, MiniBadge } from './Badge';
 import type { Order } from '../types/order';
 
-function hasChaycua(o: Order) { return o.items.some((it) => it.type === 'chaycua'); }
-function hasNoibo(o: Order) { return o.items.some((it) => it.type === 'noibo'); }
+function shippingBadgeStyle(shipping: string) {
+  if (shipping === 'EX') return { bg: colors.amberBg, text: colors.amberText };
+  if (shipping === 'TH') return { bg: colors.tealBg, text: colors.tealText };
+  return { bg: colors.purpleBg, text: colors.purpleText };
+}
 
 export default function OrderRow({ order, onPress }: { order: Order; onPress: () => void }) {
   const s = STATUSES.find((x) => x.id === order.status)!;
   const c = colorSets[s.color];
-  const mix = hasChaycua(order) && hasNoibo(order);
+  const shipStyle = shippingBadgeStyle(order.shipping);
 
   return (
     <Pressable style={styles.row} onPress={onPress}>
@@ -26,13 +29,7 @@ export default function OrderRow({ order, onPress }: { order: Order; onPress: ()
           <Text style={styles.customer}>{order.customer}</Text>
           <Text style={styles.phone}>{order.phone}</Text>
         </View>
-        {mix ? (
-          <MiniBadge bg={colors.amberBg} text={colors.amberText} label="Gộp" />
-        ) : hasChaycua(order) ? (
-          <MiniBadge bg={colors.amberBg} text={colors.amberText} label="Chạy cửa" />
-        ) : (
-          <MiniBadge bg={colors.tealBg} text={colors.tealText} label="Nội bộ" />
-        )}
+        <MiniBadge bg={shipStyle.bg} text={shipStyle.text} label={order.shippingLabel} />
       </View>
     </Pressable>
   );
