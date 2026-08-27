@@ -284,9 +284,10 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />
           </View>
           <View style={styles.infoItem}><Text style={styles.infoLabel}>Vận chuyển</Text><Text style={styles.infoValue}>{order.shippingLabel}</Text></View>
-          {!!order.warehouseName && (
-            <View style={styles.infoItem}><Text style={styles.infoLabel}>Kho</Text><Text style={styles.infoValue}>{order.warehouseName}</Text></View>
-          )}
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Kho</Text>
+            <Text style={styles.infoValue}>{order.warehouseName || order.items[0]?.warehouseName || '—'}</Text>
+          </View>
         </View>
 
         <Text style={styles.sectionLabel}>Tiến trình xử lý</Text>
