@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import StatusGrid from '../components/StatusGrid';
+import FilterModal from '../components/FilterModal';
 import OrderRow from '../components/OrderRow';
 import { STATUSES, initials } from '../data/constants';
 import { colors, radius } from '../theme';
 import type { Order, OrderStatus } from '../types/order';
 import type { StatusCounts } from '../api/orders';
 
-function toDisplayDate(d: Date): string {
-  return d.toLocaleDateString('vi-VN');
+function toISODate(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 interface Props {
@@ -45,22 +44,25 @@ export default function OrderListScreen({
   currentUserName, onLogout, search, onChangeSearch, filter, onChangeFilter, counts,
   chayCuaOnly, onChangeChayCuaOnly,
 }: Props) {
-  const [pickerOpen, setPickerOpen] = useState<'from' | 'to' | null>(null);
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
 
-  function onPickerChange(kind: 'from' | 'to', event: unknown, selected?: Date) {
-    if (Platform.OS === 'android') setPickerOpen(null);
-    if (!selected) return;
-    if (kind === 'from') onChangeDateFrom(selected);
-    else onChangeDateTo(selected);
-  }
+  const today = toISODate(new Date());
+  const isDateDefault = toISODate(dateFrom) === today && toISODate(dateTo) === today;
+  const activeFilterCount = (isDateDefault ? 0 : 1) + (filter ? 1 : 0) + (chayCuaOnly ? 1 : 0);
 
   const listTitle = filter ? STATUSES.find((s) => s.id === filter)!.name : 'Tất cả đơn hàng';
 
-  function toggleFilter(id: OrderStatus) {
-    onChangeFilter(filter === id ? null : id);
+  function handleClearAll() {
+    const now = new Date();
+    onChangeDateFrom(now);
+    onChangeDateTo(now);
+    onChangeFilter(null);
+    onChangeChayCuaOnly(false);
+    setFilterModalOpen(false);
   }
 
   return (
+    <>
     <FlatList
       style={styles.list}
       contentContainerStyle={styles.content}
@@ -106,45 +108,15 @@ export default function OrderListScreen({
             </Pressable>
           </View>
 
-          <Pressable
-            style={[styles.chayCuaToggle, chayCuaOnly && styles.chayCuaToggleActive]}
-            onPress={() => onChangeChayCuaOnly(!chayCuaOnly)}
-          >
-            <Ionicons
-              name={chayCuaOnly ? 'checkbox' : 'square-outline'}
-              size={18}
-              color={chayCuaOnly ? colors.amberText : colors.text3}
-            />
-            <Text style={[styles.chayCuaToggleText, chayCuaOnly && styles.chayCuaToggleTextActive]}>
-              Chỉ hiện đơn có hàng chạy cửa
-            </Text>
+          <Pressable style={styles.filterBtn} onPress={() => setFilterModalOpen(true)}>
+            <Ionicons name="options-outline" size={18} color={colors.text} />
+            <Text style={styles.filterBtnText}>Bộ lọc</Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
           </Pressable>
-
-          <Text style={styles.sectionLabel}>LỌC THEO KHOẢNG NGÀY</Text>
-          <View style={styles.dateSearchRow}>
-            <Pressable style={styles.dateInput} onPress={() => setPickerOpen('from')}>
-              <Text style={styles.dateInputLabel}>Từ ngày</Text>
-              <Text style={styles.dateInputValue}>{toDisplayDate(dateFrom)}</Text>
-            </Pressable>
-            <Pressable style={styles.dateInput} onPress={() => setPickerOpen('to')}>
-              <Text style={styles.dateInputLabel}>Đến ngày</Text>
-              <Text style={styles.dateInputValue}>{toDisplayDate(dateTo)}</Text>
-            </Pressable>
-          </View>
-
-          {pickerOpen && (
-            <DateTimePicker
-              value={pickerOpen === 'from' ? dateFrom : dateTo}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onChange={(e, d) => onPickerChange(pickerOpen, e, d)}
-            />
-          )}
-          {Platform.OS === 'ios' && pickerOpen && (
-            <Pressable style={styles.pickerDoneBtn} onPress={() => setPickerOpen(null)}>
-              <Text style={styles.pickerDoneBtnText}>Xong</Text>
-            </Pressable>
-          )}
 
           {loading && (
             <View style={styles.loadingRow}>
@@ -161,17 +133,8 @@ export default function OrderListScreen({
             </View>
           )}
 
-          <Text style={styles.sectionLabel}>TỔNG QUAN TRẠNG THÁI</Text>
-          <StatusGrid counts={counts} activeFilter={filter} onSelect={toggleFilter} />
-
           <View style={styles.listHeader}>
             <Text style={styles.listTitle}>{listTitle} ({total})</Text>
-            {filter && (
-              <Pressable style={styles.filterTag} onPress={() => toggleFilter(filter)}>
-                <Text style={styles.filterTagText} numberOfLines={1}>Đang lọc: {listTitle}</Text>
-                <Ionicons name="close" size={13} color={colors.blueText} />
-              </Pressable>
-            )}
           </View>
         </View>
       }
@@ -192,6 +155,21 @@ export default function OrderListScreen({
       }
       ItemSeparatorComponent={() => null}
     />
+    <FilterModal
+      visible={filterModalOpen}
+      onClose={() => setFilterModalOpen(false)}
+      dateFrom={dateFrom}
+      dateTo={dateTo}
+      onChangeDateFrom={onChangeDateFrom}
+      onChangeDateTo={onChangeDateTo}
+      filter={filter}
+      onChangeFilter={onChangeFilter}
+      counts={counts}
+      chayCuaOnly={chayCuaOnly}
+      onChangeChayCuaOnly={onChangeChayCuaOnly}
+      onClearAll={handleClearAll}
+    />
+    </>
   );
 }
 
@@ -211,21 +189,14 @@ const styles = StyleSheet.create({
   avatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.purpleBg, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 10, fontWeight: '700', color: colors.purpleText },
   userChipText: { fontSize: 12.5, color: colors.text2 },
-  searchWrap: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  searchWrap: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 46 },
   searchInput: { flex: 1, fontSize: 14.5, color: colors.text },
   scanBtn: { width: 46, height: 46, borderRadius: radius, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
-  chayCuaToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 44, marginBottom: 22 },
-  chayCuaToggleActive: { backgroundColor: colors.amberBg, borderColor: colors.amber },
-  chayCuaToggleText: { fontSize: 13.5, color: colors.text2, fontWeight: '600' },
-  chayCuaToggleTextActive: { color: colors.amberText },
-  sectionLabel: { fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, color: colors.text3, marginBottom: 12 },
-  dateSearchRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  dateInput: { flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, paddingVertical: 8, height: 54, justifyContent: 'center' },
-  dateInputLabel: { fontSize: 11, color: colors.text3, marginBottom: 2 },
-  dateInputValue: { fontSize: 14.5, fontWeight: '600', color: colors.text },
-  pickerDoneBtn: { alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, marginBottom: 4 },
-  pickerDoneBtnText: { color: colors.blueText, fontWeight: '700', fontSize: 14 },
+  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 40, marginBottom: 20 },
+  filterBtnText: { fontSize: 13.5, fontWeight: '600', color: colors.text },
+  filterBadge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  filterBadgeText: { color: '#fff', fontSize: 10.5, fontWeight: '700' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
   loadingText: { fontSize: 13, color: colors.text3 },
   errorBox: { backgroundColor: '#fdecec', borderWidth: 1, borderColor: '#f3c2c2', borderRadius: radius, padding: 12, marginBottom: 16 },
@@ -234,8 +205,6 @@ const styles = StyleSheet.create({
   retryBtnText: { color: '#fff', fontWeight: '700', fontSize: 12.5 },
   listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   listTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  filterTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.blueBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16, maxWidth: 220 },
-  filterTagText: { fontSize: 12, fontWeight: '600', color: colors.blueText },
   empty: { padding: 40, alignItems: 'center' },
   emptyText: { color: colors.text3, fontSize: 14 },
   footerLoading: { paddingVertical: 20 },
