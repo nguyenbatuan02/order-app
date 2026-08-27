@@ -114,18 +114,22 @@ function fmtDateTime(dt) {
   return `${fmtTime(dt)} ${fmtDate(dt)}`;
 }
 
+const SERVICE_CATG_CODES = ['DICHVU', 'HT-DICHVU'];
+
 const ORDER_ROWS_SELECT = `
     h.Stt, h.DocNo, h.DocCode, h.BranchCode, h.DocDate, h.CreatedAt, h.DocStatus, h.CustomerCode,
     c.Name AS CustomerName, c.Tel AS CustomerTel, COALESCE(c.Address, h.Address2, '') AS CustomerAddress,
     h.Goi_Vc, h.WarehouseCode AS HeaderWarehouseCode, w.Name AS HeaderWarehouseName,
     ct.RowId, ct.ItemCode, ct.Description, ct.Quantity, ct.UnitPrice, ct.LocationCode,
     ct.WarehouseCode AS ItemWarehouseCode, wi.Name AS ItemWarehouseName,
+    i.ItemCatgCode,
     ct.Thoigiankho, ct.Nvkho, ct.Thoigiandonggoi, ct.Nvdonggoi, ct.Thoigianvanchuyen, ct.NvVanchuyen
   FROM B30AccDoc h
   JOIN B30AccDocSales ct ON ct.Stt = h.Stt
   LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
   LEFT JOIN B20Warehouse w ON w.Code = h.WarehouseCode
   LEFT JOIN B20Warehouse wi ON wi.Code = ct.WarehouseCode
+  LEFT JOIN B20Item i ON i.Code = ct.ItemCode
 `;
 
 function shippingLabel(goiVc) {
@@ -161,6 +165,10 @@ function rowsToOrders(rows) {
     }
     const order = ordersByDoc.get(row.DocNo);
     const docStatus = row.DocStatus;
+
+    // Bỏ các dòng thuộc nhóm DỊCH VỤ (cước vận chuyển...) — không có tồn kho, không cần nhặt/đóng gói.
+    if (SERVICE_CATG_CODES.includes(row.ItemCatgCode)) continue;
+
     order.items.push({
       rowId: row.RowId,
       itemCode: row.ItemCode,
@@ -170,22 +178,29 @@ function rowsToOrders(rows) {
       sku: row.ItemCode,
       req: row.Quantity,
       shelf: row.LocationCode || '—',
-      type: 'noibo',
+      type: row.ItemCode && row.ItemCode.endsWith('-CC') ? 'chaycua' : 'noibo',
       price: row.UnitPrice,
       done: docStatus >= 3 && !!row.Thoigiandonggoi,
     });
+
     // Chỉ hiện các bước tiến trình khớp với DocStatus thực tế — DB có thể chứa timestamp
     // "ảo" vượt quá trạng thái hiện tại (dữ liệu import/test cũ), không phản ánh đúng đã xảy ra.
-    if (docStatus >= 2 && row.Thoigiankho) {
+    // Chỉ ghi 1 lần mỗi bước cho cả đơn (không lặp lại theo từng dòng sản phẩm).
+    const loggedStages = order._loggedStages || (order._loggedStages = new Set());
+    if (docStatus >= 2 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
+      loggedStages.add('xacnhan');
       order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
     }
-    if (docStatus >= 3 && row.Thoigiandonggoi) {
+    if (docStatus >= 3 && row.Thoigiandonggoi && !loggedStages.has('donggoi')) {
+      loggedStages.add('donggoi');
       order.log.push({ stage: 'donggoi', person: row.Nvdonggoi || '', time: fmtDateTime(row.Thoigiandonggoi) });
     }
-    if (docStatus >= 4 && row.Thoigianvanchuyen) {
+    if (docStatus >= 4 && row.Thoigianvanchuyen && !loggedStages.has('dieuvan')) {
+      loggedStages.add('dieuvan');
       order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
     }
   }
+  for (const order of ordersByDoc.values()) delete order._loggedStages;
   return Array.from(ordersByDoc.values());
 }
 
@@ -216,6 +231,10 @@ app.get('/api/orders/list', async (req, res) => {
   const searchClause = searchTerm
     ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)`
     : '';
+  const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
+  const chayCuaClause = chayCuaOnly
+    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')`
+    : '';
 
   try {
     const pool = await getPool();
@@ -231,6 +250,7 @@ app.get('/api/orders/list', async (req, res) => {
           AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
           ${statusClause}
           ${searchClause}
+          ${chayCuaClause}
       `);
     const total = countResult.recordset[0].total;
 
@@ -248,6 +268,7 @@ app.get('/api/orders/list', async (req, res) => {
           AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
           AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
           ${statusClause}
+          ${chayCuaClause}
           ${searchClause}
         GROUP BY h.DocNo
         ORDER BY MAX(h.CreatedAt) DESC, h.DocNo DESC
