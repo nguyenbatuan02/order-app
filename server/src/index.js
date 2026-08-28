@@ -211,6 +211,21 @@ const STATUS_TO_DOCSTATUS = {
   congno: [4, 5],
 };
 
+// warehouse query param: chuỗi mã kho phân cách bởi dấu phẩy (multi-select)
+function parseWarehouseCodes(warehouse) {
+  if (!warehouse || typeof warehouse !== 'string') return [];
+  return warehouse.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+function warehouseClause(request, codes, alias = 'wct') {
+  if (codes.length === 0) return '';
+  const names = codes.map((c, i) => {
+    request.input(`wh${i}`, sql.VarChar, c);
+    return `@wh${i}`;
+  });
+  return `AND EXISTS (SELECT 1 FROM B30AccDocSales ${alias} WHERE ${alias}.Stt = h.Stt AND ${alias}.WarehouseCode IN (${names.join(',')}))`;
+}
+
 // GET /api/orders/list?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&pageSize=20&status=&q= -> danh sách đơn hàng đầy đủ (dạng Order), có phân trang + lọc + tìm kiếm
 app.get('/api/orders/list', async (req, res) => {
   const { from, to, status, q, shipping, warehouse } = req.query;
@@ -240,16 +255,14 @@ app.get('/api/orders/list', async (req, res) => {
     : shipping === 'PICKUP'
     ? `AND (h.Goi_Vc IS NULL OR h.Goi_Vc = '')`
     : '';
-  const warehouseClause = warehouse
-    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales wct WHERE wct.Stt = h.Stt AND wct.WarehouseCode = @warehouse)`
-    : '';
+  const warehouseCodes = parseWarehouseCodes(warehouse);
 
   try {
     const pool = await getPool();
 
     const countReq = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) countReq.input('q', sql.NVarChar, `%${searchTerm}%`);
-    if (warehouse) countReq.input('warehouse', sql.VarChar, warehouse);
+    const countWarehouseClause = warehouseClause(countReq, warehouseCodes);
     const countResult = await countReq.query(`
         SELECT COUNT(DISTINCT h.DocNo) AS total
         FROM B30AccDoc h
@@ -261,7 +274,7 @@ app.get('/api/orders/list', async (req, res) => {
           ${searchClause}
           ${chayCuaClause}
           ${shippingClause}
-          ${warehouseClause}
+          ${countWarehouseClause}
       `);
     const total = countResult.recordset[0].total;
 
@@ -271,7 +284,7 @@ app.get('/api/orders/list', async (req, res) => {
       .input('offset', sql.Int, offset)
       .input('pageSize', sql.Int, pageSize);
     if (searchTerm) docNoReq.input('q', sql.NVarChar, `%${searchTerm}%`);
-    if (warehouse) docNoReq.input('warehouse', sql.VarChar, warehouse);
+    const docNoWarehouseClause = warehouseClause(docNoReq, warehouseCodes);
     const docNoResult = await docNoReq.query(`
         SELECT DISTINCT h.DocNo, MAX(h.CreatedAt) AS LastCreatedAt
         FROM B30AccDoc h
@@ -283,7 +296,7 @@ app.get('/api/orders/list', async (req, res) => {
           ${chayCuaClause}
           ${searchClause}
           ${shippingClause}
-          ${warehouseClause}
+          ${docNoWarehouseClause}
         GROUP BY h.DocNo
         ORDER BY MAX(h.CreatedAt) DESC, h.DocNo DESC
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -332,15 +345,13 @@ app.get('/api/orders/summary', async (req, res) => {
     : shipping === 'PICKUP'
     ? `AND (h.Goi_Vc IS NULL OR h.Goi_Vc = '')`
     : '';
-  const warehouseClause = warehouse
-    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales wct WHERE wct.Stt = h.Stt AND wct.WarehouseCode = @warehouse)`
-    : '';
+  const warehouseCodes = parseWarehouseCodes(warehouse);
 
   try {
     const pool = await getPool();
     const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
-    if (warehouse) request.input('warehouse', sql.VarChar, warehouse);
+    const wClause = warehouseClause(request, warehouseCodes);
     const result = await request.query(`
         SELECT h.DocStatus, COUNT(DISTINCT h.DocNo) AS cnt
         FROM B30AccDoc h
@@ -351,7 +362,7 @@ app.get('/api/orders/summary', async (req, res) => {
           ${searchClause}
           ${chayCuaClause}
           ${shippingClause}
-          ${warehouseClause}
+          ${wClause}
         GROUP BY h.DocStatus
       `);
 
@@ -380,13 +391,13 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
   const chayCuaClause = chayCuaOnly ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')` : '';
   const docStatusList = STATUS_TO_DOCSTATUS[status];
   const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : '';
-  const warehouseClause = warehouse ? `AND EXISTS (SELECT 1 FROM B30AccDocSales wct WHERE wct.Stt = h.Stt AND wct.WarehouseCode = @warehouse)` : '';
+  const warehouseCodes = parseWarehouseCodes(warehouse);
 
   try {
     const pool = await getPool();
     const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
-    if (warehouse) request.input('warehouse', sql.VarChar, warehouse);
+    const wClause = warehouseClause(request, warehouseCodes);
     const result = await request.query(`
         SELECT h.Goi_Vc, COUNT(DISTINCT h.DocNo) AS cnt
         FROM B30AccDoc h
@@ -397,7 +408,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
           ${searchClause}
           ${chayCuaClause}
           ${statusClause}
-          ${warehouseClause}
+          ${wClause}
         GROUP BY h.Goi_Vc
       `);
     const counts = { TH: 0, EX: 0, PICKUP: 0 };
