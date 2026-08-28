@@ -9,7 +9,10 @@ import OrderDetailModal from './src/components/OrderDetailModal';
 import BarcodeScannerModal from './src/components/BarcodeScannerModal';
 import Toast from './src/components/Toast';
 import { STATUSES } from './src/data/constants';
-import { completeOrderStep, fetchOrders, fetchOrderSummary, findOrder, type OrderStep, type StatusCounts } from './src/api/orders';
+import {
+  completeOrderStep, fetchOrders, fetchOrderSummary, fetchShippingSummary, fetchWarehouses, findOrder,
+  type OrderStep, type StatusCounts, type ShippingFilter, type ShippingCounts, type WarehouseOption,
+} from './src/api/orders';
 import { login as apiLogin, logout as apiLogout, type Session } from './src/api/auth';
 import { colors } from './src/theme';
 import type { Order, OrderStatus } from './src/types/order';
@@ -20,6 +23,7 @@ type ItemQty = { rowId: string; itemCode: string; quantity: number };
 const SESSION_KEY = 'session';
 const PAGE_SIZE = 20;
 const EMPTY_COUNTS: StatusCounts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0 };
+const EMPTY_SHIPPING_COUNTS: ShippingCounts = { TH: 0, EX: 0, PICKUP: 0 };
 
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -85,6 +89,10 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
   const [dateTo, setDateTo] = useState(new Date());
   const [filter, setFilter] = useState<OrderStatus | null>(null);
   const [chayCuaOnly, setChayCuaOnly] = useState(false);
+  const [shipping, setShipping] = useState<ShippingFilter>(null);
+  const [warehouse, setWarehouse] = useState<string | null>(null);
+  const [shippingCounts, setShippingCounts] = useState<ShippingCounts>(EMPTY_SHIPPING_COUNTS);
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -111,7 +119,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     if (reset) { setLoading(true); setError(''); } else { setLoadingMore(true); }
     try {
       const data = await fetchOrders(
-        toISODate(dateFrom), toISODate(dateTo), pageNum, PAGE_SIZE, filter, debouncedSearch, chayCuaOnly
+        toISODate(dateFrom), toISODate(dateTo), pageNum, PAGE_SIZE, filter, debouncedSearch, chayCuaOnly, shipping, warehouse
       );
       if (myGen !== genRef.current) return; // kết quả cũ (bộ lọc đã đổi), bỏ qua
       setOrders((prev) => {
@@ -131,10 +139,28 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
   async function loadSummary() {
     try {
-      const c = await fetchOrderSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly);
+      const c = await fetchOrderSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly, shipping, warehouse);
       setCounts(c);
     } catch {
       // im lặng bỏ qua lỗi tổng quan, không chặn danh sách chính
+    }
+  }
+
+  async function loadShippingSummary() {
+    try {
+      const c = await fetchShippingSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly, filter, warehouse);
+      setShippingCounts(c);
+    } catch {
+      // im lặng bỏ qua
+    }
+  }
+
+  async function loadWarehouses() {
+    try {
+      const w = await fetchWarehouses(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly, filter, shipping);
+      setWarehouses(w);
+    } catch {
+      // im lặng bỏ qua
     }
   }
 
@@ -143,11 +169,13 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     loadingMoreRef.current = false;
     loadOrders(1, true);
     loadSummary();
+    loadShippingSummary();
+    loadWarehouses();
   }
 
   useEffect(() => {
     refresh();
-  }, [dateFrom, dateTo, filter, debouncedSearch, chayCuaOnly]);
+  }, [dateFrom, dateTo, filter, debouncedSearch, chayCuaOnly, shipping, warehouse]);
 
   function handleLoadMore() {
     if (loading || loadingMoreRef.current || !hasMore) return;
@@ -247,6 +275,12 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
             counts={counts}
             chayCuaOnly={chayCuaOnly}
             onChangeChayCuaOnly={setChayCuaOnly}
+            shipping={shipping}
+            onChangeShipping={setShipping}
+            shippingCounts={shippingCounts}
+            warehouse={warehouse}
+            onChangeWarehouse={setWarehouse}
+            warehouses={warehouses}
           />
           <OrderDetailModal
             order={currentOrder}

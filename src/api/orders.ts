@@ -9,6 +9,8 @@ export interface OrdersPage {
   pageSize: number;
 }
 
+export type ShippingFilter = 'TH' | 'EX' | 'PICKUP' | null;
+
 export async function fetchOrders(
   from: string,
   to: string,
@@ -16,12 +18,16 @@ export async function fetchOrders(
   pageSize: number,
   status?: string | null,
   q?: string,
-  chayCua?: boolean
+  chayCua?: boolean,
+  shipping?: ShippingFilter,
+  warehouse?: string | null
 ): Promise<OrdersPage> {
   const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
+  if (shipping) params.set('shipping', shipping);
+  if (warehouse) params.set('warehouse', warehouse);
   const res = await fetch(`${API_BASE_URL}/api/orders/list?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -38,10 +44,14 @@ export interface StatusCounts {
   congno: number;
 }
 
-export async function fetchOrderSummary(from: string, to: string, q?: string, chayCua?: boolean): Promise<StatusCounts> {
+export async function fetchOrderSummary(
+  from: string, to: string, q?: string, chayCua?: boolean, shipping?: ShippingFilter, warehouse?: string | null
+): Promise<StatusCounts> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
+  if (shipping) params.set('shipping', shipping);
+  if (warehouse) params.set('warehouse', warehouse);
   const res = await fetch(`${API_BASE_URL}/api/orders/summary?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -49,6 +59,52 @@ export async function fetchOrderSummary(from: string, to: string, q?: string, ch
   }
   const data = await res.json();
   return data.counts;
+}
+
+export interface ShippingCounts {
+  TH: number;
+  EX: number;
+  PICKUP: number;
+}
+
+export async function fetchShippingSummary(
+  from: string, to: string, q?: string, chayCua?: boolean, status?: string | null, warehouse?: string | null
+): Promise<ShippingCounts> {
+  const params = new URLSearchParams({ from, to });
+  if (q) params.set('q', q);
+  if (chayCua) params.set('chayCua', '1');
+  if (status) params.set('status', status);
+  if (warehouse) params.set('warehouse', warehouse);
+  const res = await fetch(`${API_BASE_URL}/api/orders/shipping-summary?${params.toString()}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Lỗi tải tổng quan vận chuyển (${res.status})`);
+  }
+  const data = await res.json();
+  return data.counts;
+}
+
+export interface WarehouseOption {
+  code: string;
+  name: string;
+  count: number;
+}
+
+export async function fetchWarehouses(
+  from: string, to: string, q?: string, chayCua?: boolean, status?: string | null, shipping?: ShippingFilter
+): Promise<WarehouseOption[]> {
+  const params = new URLSearchParams({ from, to });
+  if (q) params.set('q', q);
+  if (chayCua) params.set('chayCua', '1');
+  if (status) params.set('status', status);
+  if (shipping) params.set('shipping', shipping);
+  const res = await fetch(`${API_BASE_URL}/api/orders/warehouses?${params.toString()}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Lỗi tải danh sách kho (${res.status})`);
+  }
+  const data = await res.json();
+  return data.warehouses;
 }
 
 export async function findOrder(docNo: string): Promise<Order> {
