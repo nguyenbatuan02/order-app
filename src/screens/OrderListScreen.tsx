@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import StatusGrid from '../components/StatusGrid';
+import ShippingGrid from '../components/ShippingGrid';
+import WarehousePickerModal from '../components/WarehousePickerModal';
 import OrderRow from '../components/OrderRow';
 import { STATUSES, initials } from '../data/constants';
 import { colors, radius } from '../theme';
@@ -12,12 +14,6 @@ import type { StatusCounts, ShippingFilter, ShippingCounts, WarehouseOption } fr
 function toDisplayDate(d: Date): string {
   return d.toLocaleDateString('vi-VN');
 }
-
-const SHIPPING_OPTIONS: { id: ShippingFilter; label: string }[] = [
-  { id: 'EX', label: 'Giao nhanh' },
-  { id: 'TH', label: 'Giao thường' },
-  { id: 'PICKUP', label: 'Khách đến lấy' },
-];
 
 interface Props {
   orders: Order[];
@@ -59,6 +55,7 @@ export default function OrderListScreen({
   warehouse, onChangeWarehouse, warehouses,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState<'from' | 'to' | null>(null);
+  const [warehousePickerOpen, setWarehousePickerOpen] = useState(false);
 
   function onPickerChange(kind: 'from' | 'to', event: unknown, selected?: Date) {
     if (Platform.OS === 'android') setPickerOpen(null);
@@ -68,20 +65,14 @@ export default function OrderListScreen({
   }
 
   const listTitle = filter ? STATUSES.find((s) => s.id === filter)!.name : 'Tất cả đơn hàng';
+  const selectedWarehouse = warehouses.find((w) => w.code === warehouse);
 
   function toggleFilter(id: OrderStatus) {
     onChangeFilter(filter === id ? null : id);
   }
 
-  function toggleShipping(id: ShippingFilter) {
-    onChangeShipping(shipping === id ? null : id);
-  }
-
-  function toggleWarehouse(code: string) {
-    onChangeWarehouse(warehouse === code ? null : code);
-  }
-
   return (
+    <>
     <FlatList
       style={styles.list}
       contentContainerStyle={styles.content}
@@ -186,45 +177,16 @@ export default function OrderListScreen({
           <StatusGrid counts={counts} activeFilter={filter} onSelect={toggleFilter} />
 
           <Text style={styles.sectionLabel}>VẬN CHUYỂN</Text>
-          <View style={styles.chipRow}>
-            {SHIPPING_OPTIONS.map((opt) => {
-              const active = shipping === opt.id;
-              const count = opt.id ? shippingCounts[opt.id] : 0;
-              return (
-                <Pressable
-                  key={opt.id}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => toggleShipping(opt.id)}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label} ({count})</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <ShippingGrid counts={shippingCounts} activeFilter={shipping} onSelect={onChangeShipping} />
 
-          {warehouses.length > 0 && (
-            <>
-              <Text style={styles.sectionLabel}>KHO</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.warehouseScroll}>
-                <View style={styles.chipRow}>
-                  {warehouses.map((w) => {
-                    const active = warehouse === w.code;
-                    return (
-                      <Pressable
-                        key={w.code}
-                        style={[styles.chip, active && styles.chipActive]}
-                        onPress={() => toggleWarehouse(w.code)}
-                      >
-                        <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-                          {w.name} ({w.count})
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            </>
-          )}
+          <Text style={styles.sectionLabel}>KHO</Text>
+          <Pressable style={styles.warehouseBtn} onPress={() => setWarehousePickerOpen(true)}>
+            <Ionicons name="business-outline" size={18} color={colors.text2} />
+            <Text style={styles.warehouseBtnText} numberOfLines={1}>
+              {selectedWarehouse ? selectedWarehouse.name : 'Tất cả các kho'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.text3} />
+          </Pressable>
 
           <View style={styles.listHeader}>
             <Text style={styles.listTitle}>{listTitle} ({total})</Text>
@@ -248,6 +210,14 @@ export default function OrderListScreen({
       }
       ItemSeparatorComponent={() => null}
     />
+    <WarehousePickerModal
+      visible={warehousePickerOpen}
+      onClose={() => setWarehousePickerOpen(false)}
+      warehouses={warehouses}
+      selected={warehouse}
+      onSelect={onChangeWarehouse}
+    />
+    </>
   );
 }
 
@@ -288,12 +258,8 @@ const styles = StyleSheet.create({
   errorText: { color: '#a33', fontSize: 13, marginBottom: 8 },
   retryBtn: { alignSelf: 'flex-start', backgroundColor: '#a33', borderRadius: radius, paddingHorizontal: 14, paddingVertical: 7 },
   retryBtnText: { color: '#fff', fontWeight: '700', fontSize: 12.5 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  warehouseScroll: { marginBottom: 4 },
-  chip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  chipActive: { backgroundColor: colors.blueBg, borderColor: colors.blue },
-  chipText: { fontSize: 12.5, fontWeight: '600', color: colors.text2 },
-  chipTextActive: { color: colors.blueText },
+  warehouseBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 48, marginBottom: 20 },
+  warehouseBtnText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: colors.text },
   listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   listTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
   empty: { padding: 40, alignItems: 'center' },
