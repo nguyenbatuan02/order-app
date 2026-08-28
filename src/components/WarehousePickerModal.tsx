@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from '../theme';
@@ -7,14 +8,28 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   warehouses: WarehouseOption[];
-  selected: string | null;
-  onSelect: (code: string | null) => void;
+  selected: string[];
+  onApply: (codes: string[]) => void;
 }
 
-export default function WarehousePickerModal({ visible, onClose, warehouses, selected, onSelect }: Props) {
-  function choose(code: string | null) {
-    onSelect(code);
+export default function WarehousePickerModal({ visible, onClose, warehouses, selected, onApply }: Props) {
+  const [draft, setDraft] = useState<string[]>(selected);
+
+  useEffect(() => {
+    if (visible) setDraft(selected);
+  }, [visible]);
+
+  function toggle(code: string) {
+    setDraft((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
+  }
+
+  function handleApply() {
+    onApply(draft);
     onClose();
+  }
+
+  function handleClear() {
+    setDraft([]);
   }
 
   return (
@@ -27,19 +42,10 @@ export default function WarehousePickerModal({ visible, onClose, warehouses, sel
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-        <Pressable style={styles.row} onPress={() => choose(null)}>
-          <Ionicons
-            name={selected === null ? 'checkbox' : 'square-outline'}
-            size={20}
-            color={selected === null ? colors.blue : colors.text3}
-          />
-          <Text style={styles.rowText}>Tất cả các kho</Text>
-        </Pressable>
-
         {warehouses.map((w) => {
-          const active = selected === w.code;
+          const active = draft.includes(w.code);
           return (
-            <Pressable key={w.code} style={styles.row} onPress={() => choose(w.code)}>
+            <Pressable key={w.code} style={styles.row} onPress={() => toggle(w.code)}>
               <Ionicons
                 name={active ? 'checkbox' : 'square-outline'}
                 size={20}
@@ -56,6 +62,15 @@ export default function WarehousePickerModal({ visible, onClose, warehouses, sel
           <Text style={styles.emptyText}>Không có kho nào trong khoảng ngày đang chọn</Text>
         )}
       </ScrollView>
+
+      <View style={styles.foot}>
+        <Pressable style={styles.clearBtn} onPress={handleClear}>
+          <Text style={styles.clearBtnText}>Bỏ chọn hết</Text>
+        </Pressable>
+        <Pressable style={styles.applyBtn} onPress={handleApply}>
+          <Text style={styles.applyBtnText}>Áp dụng{draft.length > 0 ? ` (${draft.length})` : ''}</Text>
+        </Pressable>
+      </View>
     </Modal>
   );
 }
@@ -71,4 +86,9 @@ const styles = StyleSheet.create({
   rowTextActive: { color: colors.blueText, fontWeight: '700' },
   rowCount: { color: colors.text3, fontWeight: '400' },
   emptyText: { textAlign: 'center', color: colors.text3, fontSize: 13, marginTop: 30 },
+  foot: { flexDirection: 'row', gap: 10, padding: 16, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2 },
+  clearBtn: { flex: 1, height: 46, borderRadius: radius, borderWidth: 1, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  clearBtnText: { color: colors.text, fontWeight: '600', fontSize: 14 },
+  applyBtn: { flex: 1, height: 46, borderRadius: radius, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },
+  applyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

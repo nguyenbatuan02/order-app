@@ -42,8 +42,8 @@ interface Props {
   shipping: ShippingFilter;
   onChangeShipping: (s: ShippingFilter) => void;
   shippingCounts: ShippingCounts;
-  warehouse: string | null;
-  onChangeWarehouse: (w: string | null) => void;
+  warehouse: string[];
+  onChangeWarehouse: (w: string[]) => void;
   warehouses: WarehouseOption[];
 }
 
@@ -65,7 +65,12 @@ export default function OrderListScreen({
   }
 
   const listTitle = filter ? STATUSES.find((s) => s.id === filter)!.name : 'Tất cả đơn hàng';
-  const selectedWarehouse = warehouses.find((w) => w.code === warehouse);
+  const warehouseBtnLabel =
+    warehouse.length === 0
+      ? 'Tất cả các kho'
+      : warehouse.length === 1
+      ? warehouses.find((w) => w.code === warehouse[0])?.name ?? warehouse[0]
+      : `${warehouse.length} kho đã chọn`;
 
   function toggleFilter(id: OrderStatus) {
     onChangeFilter(filter === id ? null : id);
@@ -183,7 +188,7 @@ export default function OrderListScreen({
           <Pressable style={styles.warehouseBtn} onPress={() => setWarehousePickerOpen(true)}>
             <Ionicons name="business-outline" size={18} color={colors.text2} />
             <Text style={styles.warehouseBtnText} numberOfLines={1}>
-              {selectedWarehouse ? selectedWarehouse.name : 'Tất cả các kho'}
+              {warehouseBtnLabel}
             </Text>
             <Ionicons name="chevron-forward" size={18} color={colors.text3} />
           </Pressable>
@@ -215,7 +220,7 @@ export default function OrderListScreen({
       onClose={() => setWarehousePickerOpen(false)}
       warehouses={warehouses}
       selected={warehouse}
-      onSelect={onChangeWarehouse}
+      onApply={onChangeWarehouse}
     />
     </>
   );

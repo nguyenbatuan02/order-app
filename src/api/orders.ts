@@ -20,14 +20,14 @@ export async function fetchOrders(
   q?: string,
   chayCua?: boolean,
   shipping?: ShippingFilter,
-  warehouse?: string | null
+  warehouse?: string[]
 ): Promise<OrdersPage> {
   const params = new URLSearchParams({ from, to, page: String(page), pageSize: String(pageSize) });
   if (status) params.set('status', status);
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
   if (shipping) params.set('shipping', shipping);
-  if (warehouse) params.set('warehouse', warehouse);
+  if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
   const res = await fetch(`${API_BASE_URL}/api/orders/list?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -45,13 +45,13 @@ export interface StatusCounts {
 }
 
 export async function fetchOrderSummary(
-  from: string, to: string, q?: string, chayCua?: boolean, shipping?: ShippingFilter, warehouse?: string | null
+  from: string, to: string, q?: string, chayCua?: boolean, shipping?: ShippingFilter, warehouse?: string[]
 ): Promise<StatusCounts> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
   if (shipping) params.set('shipping', shipping);
-  if (warehouse) params.set('warehouse', warehouse);
+  if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
   const res = await fetch(`${API_BASE_URL}/api/orders/summary?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -68,13 +68,13 @@ export interface ShippingCounts {
 }
 
 export async function fetchShippingSummary(
-  from: string, to: string, q?: string, chayCua?: boolean, status?: string | null, warehouse?: string | null
+  from: string, to: string, q?: string, chayCua?: boolean, status?: string | null, warehouse?: string[]
 ): Promise<ShippingCounts> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
   if (status) params.set('status', status);
-  if (warehouse) params.set('warehouse', warehouse);
+  if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
   const res = await fetch(`${API_BASE_URL}/api/orders/shipping-summary?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
