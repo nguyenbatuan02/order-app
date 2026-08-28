@@ -213,7 +213,7 @@ const STATUS_TO_DOCSTATUS = {
 
 // GET /api/orders/list?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&pageSize=20&status=&q= -> danh sách đơn hàng đầy đủ (dạng Order), có phân trang + lọc + tìm kiếm
 app.get('/api/orders/list', async (req, res) => {
-  const { from, to, status, q } = req.query;
+  const { from, to, status, q, shipping, warehouse } = req.query;
   const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
   if (!isValidDate(from)) {
@@ -235,12 +235,21 @@ app.get('/api/orders/list', async (req, res) => {
   const chayCuaClause = chayCuaOnly
     ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')`
     : '';
+  const shippingClause = shipping === 'TH' || shipping === 'EX'
+    ? `AND h.Goi_Vc = '${shipping}'`
+    : shipping === 'PICKUP'
+    ? `AND (h.Goi_Vc IS NULL OR h.Goi_Vc = '')`
+    : '';
+  const warehouseClause = warehouse
+    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales wct WHERE wct.Stt = h.Stt AND wct.WarehouseCode = @warehouse)`
+    : '';
 
   try {
     const pool = await getPool();
 
     const countReq = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) countReq.input('q', sql.NVarChar, `%${searchTerm}%`);
+    if (warehouse) countReq.input('warehouse', sql.VarChar, warehouse);
     const countResult = await countReq.query(`
         SELECT COUNT(DISTINCT h.DocNo) AS total
         FROM B30AccDoc h
@@ -251,6 +260,8 @@ app.get('/api/orders/list', async (req, res) => {
           ${statusClause}
           ${searchClause}
           ${chayCuaClause}
+          ${shippingClause}
+          ${warehouseClause}
       `);
     const total = countResult.recordset[0].total;
 
@@ -260,6 +271,7 @@ app.get('/api/orders/list', async (req, res) => {
       .input('offset', sql.Int, offset)
       .input('pageSize', sql.Int, pageSize);
     if (searchTerm) docNoReq.input('q', sql.NVarChar, `%${searchTerm}%`);
+    if (warehouse) docNoReq.input('warehouse', sql.VarChar, warehouse);
     const docNoResult = await docNoReq.query(`
         SELECT DISTINCT h.DocNo, MAX(h.CreatedAt) AS LastCreatedAt
         FROM B30AccDoc h
@@ -270,6 +282,8 @@ app.get('/api/orders/list', async (req, res) => {
           ${statusClause}
           ${chayCuaClause}
           ${searchClause}
+          ${shippingClause}
+          ${warehouseClause}
         GROUP BY h.DocNo
         ORDER BY MAX(h.CreatedAt) DESC, h.DocNo DESC
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -300,7 +314,7 @@ app.get('/api/orders/list', async (req, res) => {
 
 // GET /api/orders/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&q= -> số lượng đơn theo trạng thái, không phân trang
 app.get('/api/orders/summary', async (req, res) => {
-  const { from, to, q } = req.query;
+  const { from, to, q, shipping, warehouse } = req.query;
   const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
   if (!isValidDate(from)) {
@@ -313,11 +327,20 @@ app.get('/api/orders/summary', async (req, res) => {
   const chayCuaClause = chayCuaOnly
     ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')`
     : '';
+  const shippingClause = shipping === 'TH' || shipping === 'EX'
+    ? `AND h.Goi_Vc = '${shipping}'`
+    : shipping === 'PICKUP'
+    ? `AND (h.Goi_Vc IS NULL OR h.Goi_Vc = '')`
+    : '';
+  const warehouseClause = warehouse
+    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales wct WHERE wct.Stt = h.Stt AND wct.WarehouseCode = @warehouse)`
+    : '';
 
   try {
     const pool = await getPool();
     const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
+    if (warehouse) request.input('warehouse', sql.VarChar, warehouse);
     const result = await request.query(`
         SELECT h.DocStatus, COUNT(DISTINCT h.DocNo) AS cnt
         FROM B30AccDoc h
@@ -327,6 +350,8 @@ app.get('/api/orders/summary', async (req, res) => {
           AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
           ${searchClause}
           ${chayCuaClause}
+          ${shippingClause}
+          ${warehouseClause}
         GROUP BY h.DocStatus
       `);
 
@@ -335,6 +360,106 @@ app.get('/api/orders/summary', async (req, res) => {
       counts[mapDocStatus(row.DocStatus)] += row.cnt;
     }
     res.json({ counts });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Lỗi truy vấn cơ sở dữ liệu' });
+  }
+});
+
+// GET /api/orders/shipping-summary?from&to&q&status&chayCua&warehouse -> số đơn theo gói vận chuyển (TH/EX/PICKUP)
+app.get('/api/orders/shipping-summary', async (req, res) => {
+  const { from, to, q, status, warehouse } = req.query;
+  const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (!isValidDate(from)) {
+    return res.status(400).json({ error: 'Query param "from" phải theo định dạng YYYY-MM-DD' });
+  }
+  const toDate = isValidDate(to) ? to : from;
+  const searchTerm = typeof q === 'string' ? q.trim() : '';
+  const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
+  const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
+  const chayCuaClause = chayCuaOnly ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')` : '';
+  const docStatusList = STATUS_TO_DOCSTATUS[status];
+  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : '';
+  const warehouseClause = warehouse ? `AND EXISTS (SELECT 1 FROM B30AccDocSales wct WHERE wct.Stt = h.Stt AND wct.WarehouseCode = @warehouse)` : '';
+
+  try {
+    const pool = await getPool();
+    const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
+    if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
+    if (warehouse) request.input('warehouse', sql.VarChar, warehouse);
+    const result = await request.query(`
+        SELECT h.Goi_Vc, COUNT(DISTINCT h.DocNo) AS cnt
+        FROM B30AccDoc h
+        LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
+        WHERE h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
+          AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
+          AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
+          ${searchClause}
+          ${chayCuaClause}
+          ${statusClause}
+          ${warehouseClause}
+        GROUP BY h.Goi_Vc
+      `);
+    const counts = { TH: 0, EX: 0, PICKUP: 0 };
+    for (const row of result.recordset) {
+      if (row.Goi_Vc === 'TH') counts.TH += row.cnt;
+      else if (row.Goi_Vc === 'EX') counts.EX += row.cnt;
+      else counts.PICKUP += row.cnt;
+    }
+    res.json({ counts });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Lỗi truy vấn cơ sở dữ liệu' });
+  }
+});
+
+// GET /api/orders/warehouses?from&to&q&status&chayCua&shipping -> danh sách kho đang có đơn (kèm số lượng), sắp xếp giảm dần
+app.get('/api/orders/warehouses', async (req, res) => {
+  const { from, to, q, status, shipping } = req.query;
+  const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (!isValidDate(from)) {
+    return res.status(400).json({ error: 'Query param "from" phải theo định dạng YYYY-MM-DD' });
+  }
+  const toDate = isValidDate(to) ? to : from;
+  const searchTerm = typeof q === 'string' ? q.trim() : '';
+  const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
+  const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
+  const chayCuaClause = chayCuaOnly ? `AND ct.ItemCode LIKE '%-CC'` : '';
+  const docStatusList = STATUS_TO_DOCSTATUS[status];
+  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : '';
+  const shippingClause = shipping === 'TH' || shipping === 'EX'
+    ? `AND h.Goi_Vc = '${shipping}'`
+    : shipping === 'PICKUP'
+    ? `AND (h.Goi_Vc IS NULL OR h.Goi_Vc = '')`
+    : '';
+
+  try {
+    const pool = await getPool();
+    const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
+    if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
+    const result = await request.query(`
+        SELECT ct.WarehouseCode, w.Name AS WarehouseName, COUNT(DISTINCT h.DocNo) AS cnt
+        FROM B30AccDocSales ct
+        JOIN B30AccDoc h ON ct.Stt = h.Stt
+        LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
+        LEFT JOIN B20Warehouse w ON w.Code = ct.WarehouseCode
+        WHERE h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
+          AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
+          AND ct.WarehouseCode IS NOT NULL AND ct.WarehouseCode <> ''
+          ${searchClause}
+          ${chayCuaClause}
+          ${statusClause}
+          ${shippingClause}
+        GROUP BY ct.WarehouseCode, w.Name
+        ORDER BY cnt DESC
+      `);
+    res.json({
+      warehouses: result.recordset.map((r) => ({
+        code: r.WarehouseCode,
+        name: r.WarehouseName || r.WarehouseCode,
+        count: r.cnt,
+      })),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Lỗi truy vấn cơ sở dữ liệu' });
