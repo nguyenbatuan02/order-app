@@ -55,28 +55,22 @@ export default function App() {
     await AsyncStorage.removeItem(SESSION_KEY);
   }
 
-  if (bootstrapping) {
-    return (
-      <SafeAreaProvider>
+  return (
+    <SafeAreaProvider>
+      {bootstrapping ? (
         <SafeAreaView style={styles.bootRoot}>
           <ActivityIndicator color={colors.blue} size="large" />
         </SafeAreaView>
-      </SafeAreaProvider>
-    );
-  }
-
-  if (!session) {
-    return (
-      <SafeAreaProvider>
+      ) : !session ? (
         <SafeAreaView style={styles.root} edges={['top']}>
           <LoginScreen onLogin={handleLogin} />
           <StatusBar style="dark" />
         </SafeAreaView>
-      </SafeAreaProvider>
-    );
-  }
-
-  return <MainApp session={session} onLogout={handleLogout} />;
+      ) : (
+        <MainApp session={session} onLogout={handleLogout} />
+      )}
+    </SafeAreaProvider>
+  );
 }
 
 function MainApp({ session, onLogout }: { session: Session; onLogout: () => void }) {
@@ -252,7 +246,6 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
   function handleCompleteChaycua() {}
 
   return (
-    <SafeAreaProvider>
       <SafeAreaView style={styles.root} edges={['top']}>
         <View style={{ flex: 1 }}>
           {tab === 'home' ? (
@@ -317,7 +310,6 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
         </View>
         <StatusBar style="dark" />
       </SafeAreaView>
-    </SafeAreaProvider>
   );
 }
 
