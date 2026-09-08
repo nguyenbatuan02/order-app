@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import OrderListScreen from './src/screens/OrderListScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -80,6 +80,7 @@ export default function App() {
 }
 
 function MainApp({ session, onLogout }: { session: Session; onLogout: () => void }) {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<'home' | 'settings'>('home');
   const [orders, setOrders] = useState<Order[]>([]);
   const [page, setPage] = useState(1);
@@ -288,7 +289,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
             <SettingsScreen user={session.user} token={session.token} onLogout={onLogout} />
           )}
 
-          <View style={styles.tabBar}>
+          <View style={[styles.tabBar, { paddingBottom: 8 + insets.bottom }]}>
             <Pressable style={styles.tabBtn} onPress={() => setTab('home')}>
               <Ionicons name={tab === 'home' ? 'home' : 'home-outline'} size={22} color={tab === 'home' ? colors.blue : colors.text3} />
               <Text style={[styles.tabLabel, tab === 'home' && styles.tabLabelActive]}>Trang chủ</Text>
