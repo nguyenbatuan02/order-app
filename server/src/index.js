@@ -241,7 +241,7 @@ app.get('/api/orders/list', async (req, res) => {
   const offset = (page - 1) * pageSize;
 
   const docStatusList = STATUS_TO_DOCSTATUS[status];
-  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : '';
+  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : (status ? 'AND 1=0' : '');
   const searchTerm = typeof q === 'string' ? q.trim() : '';
   const searchClause = searchTerm
     ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)`
@@ -390,7 +390,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
   const chayCuaClause = chayCuaOnly ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')` : '';
   const docStatusList = STATUS_TO_DOCSTATUS[status];
-  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : '';
+  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : (status ? 'AND 1=0' : '');
   const warehouseCodes = parseWarehouseCodes(warehouse);
 
   try {
@@ -437,7 +437,7 @@ app.get('/api/orders/warehouses', async (req, res) => {
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
   const chayCuaClause = chayCuaOnly ? `AND ct.ItemCode LIKE '%-CC'` : '';
   const docStatusList = STATUS_TO_DOCSTATUS[status];
-  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : '';
+  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : (status ? 'AND 1=0' : '');
   const shippingClause = shipping === 'TH' || shipping === 'EX'
     ? `AND h.Goi_Vc = '${shipping}'`
     : shipping === 'PICKUP'

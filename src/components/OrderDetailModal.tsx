@@ -276,9 +276,6 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
       <ScrollView style={styles.body} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         <View style={styles.infoGrid}>
-          <View style={styles.infoItem}><Text style={styles.infoLabel}>Khách hàng</Text><Text style={styles.infoValue}>{order.customer}</Text></View>
-          <View style={styles.infoItem}><Text style={styles.infoLabel}>Số điện thoại</Text><Text style={styles.infoValue}>{order.phone}</Text></View>
-          <View style={styles.infoItem}><Text style={styles.infoLabel}>Địa chỉ giao</Text><Text style={styles.infoValue}>{order.addr}</Text></View>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Trạng thái</Text>
             <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />

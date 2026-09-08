@@ -22,7 +22,7 @@ interface Props {
 export default function StatusGrid({ counts, activeFilter, onSelect }: Props) {
   return (
     <View style={styles.grid}>
-      {STATUSES.map((s) => {
+      {STATUSES.filter((s) => s.id !== 'congno').map((s) => {
         const count = counts[s.id] ?? 0;
         const c = colorSets[s.color];
         const active = activeFilter === s.id;

@@ -25,10 +25,7 @@ export default function OrderRow({ order, onPress }: { order: Order; onPress: ()
         <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />
       </View>
       <View style={styles.bottomLine}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.customer}>{order.customer}</Text>
-          <Text style={styles.phone}>{order.phone}</Text>
-        </View>
+        <View style={{ flex: 1 }} />
         <MiniBadge bg={shipStyle.bg} text={shipStyle.text} label={order.shippingLabel} />
       </View>
     </Pressable>
