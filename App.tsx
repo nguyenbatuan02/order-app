@@ -209,7 +209,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
       await completeOrderStep(id, step, session.token, items);
       setOpenId(null);
       if (diffs.length > 0) {
-        showToast(`Đã ghi nhận ${diffs.length} SP chênh lệch · ${id}`);
+        showToast(`Thiếu ${diffs.length} SP · Đơn ${id} chuyển sang "Cần sửa đơn" chờ Sale xử lý`);
       } else {
         showToast(`Đã hoàn thành ${id} · đủ số lượng`);
       }
