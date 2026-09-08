@@ -6,7 +6,7 @@ import StatusGrid from '../components/StatusGrid';
 import ShippingGrid from '../components/ShippingGrid';
 import WarehousePickerModal from '../components/WarehousePickerModal';
 import OrderRow from '../components/OrderRow';
-import { STATUSES, initials } from '../data/constants';
+import { STATUSES } from '../data/constants';
 import { colors, radius } from '../theme';
 import type { Order, OrderStatus } from '../types/order';
 import type { StatusCounts, ShippingFilter, ShippingCounts, WarehouseOption } from '../api/orders';
@@ -30,8 +30,6 @@ interface Props {
   onRetry: () => void;
   onLoadMore: () => void;
   onScanPress: () => void;
-  currentUserName: string;
-  onLogout: () => void;
   search: string;
   onChangeSearch: (q: string) => void;
   filter: OrderStatus | null;
@@ -50,7 +48,7 @@ interface Props {
 export default function OrderListScreen({
   orders, onOpen, loading, loadingMore, hasMore, total, error, dateFrom, dateTo,
   onChangeDateFrom, onChangeDateTo, onRetry, onLoadMore, onScanPress,
-  currentUserName, onLogout, search, onChangeSearch, filter, onChangeFilter, counts,
+  search, onChangeSearch, filter, onChangeFilter, counts,
   chayCuaOnly, onChangeChayCuaOnly, shipping, onChangeShipping, shippingCounts,
   warehouse, onChangeWarehouse, warehouses,
 }: Props) {
@@ -96,17 +94,6 @@ export default function OrderListScreen({
               </View>
             </View>
           </View>
-          <View style={styles.userRow}>
-            <View style={styles.userChip}>
-              <View style={styles.avatar}><Text style={styles.avatarText}>{initials(currentUserName)}</Text></View>
-              <Text style={styles.userChipText}>{currentUserName}</Text>
-            </View>
-            <Pressable style={styles.logoutBtn} onPress={onLogout}>
-              <Ionicons name="log-out-outline" size={16} color={colors.text2} />
-              <Text style={styles.logoutBtnText}>Đăng xuất</Text>
-            </Pressable>
-          </View>
-
           <View style={styles.searchWrap}>
             <View style={styles.searchRow}>
               <Ionicons name="search" size={18} color={colors.text3} />
@@ -235,14 +222,7 @@ const styles = StyleSheet.create({
   logoText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   h1: { fontSize: 18, fontWeight: '700', color: colors.text },
   sub: { fontSize: 12.5, color: colors.text3, marginTop: 1 },
-  userRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  userChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6 },
-  logoutBtnText: { fontSize: 12.5, color: colors.text2, fontWeight: '600' },
-  avatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.purpleBg, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 10, fontWeight: '700', color: colors.purpleText },
-  userChipText: { fontSize: 12.5, color: colors.text2 },
-  searchWrap: { flexDirection: 'row', gap: 10, marginBottom: 22 },
+  searchWrap: { flexDirection: 'row', gap: 10, marginTop: 16, marginBottom: 22 },
   searchRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius, paddingHorizontal: 14, height: 46 },
   searchInput: { flex: 1, fontSize: 14.5, color: colors.text },
   scanBtn: { width: 46, height: 46, borderRadius: radius, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center' },

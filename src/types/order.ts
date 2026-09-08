@@ -36,6 +36,9 @@ export interface Order {
   shippingLabel: string;
   warehouseCode: string;
   warehouseName: string;
+  slaMinutes: number | null;
+  slaStatus: 'on_time' | 'late' | 'in_progress' | 'at_risk' | 'unknown';
+  slaThresholdMinutes: number;
   items: OrderItem[];
   log: LogEntry[];
 }

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import OrderListScreen from './src/screens/OrderListScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import OrderDetailModal from './src/components/OrderDetailModal';
 import BarcodeScannerModal from './src/components/BarcodeScannerModal';
 import Toast from './src/components/Toast';
@@ -78,6 +80,7 @@ export default function App() {
 }
 
 function MainApp({ session, onLogout }: { session: Session; onLogout: () => void }) {
+  const [tab, setTab] = useState<'home' | 'settings'>('home');
   const [orders, setOrders] = useState<Order[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -251,37 +254,51 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     <SafeAreaProvider>
       <SafeAreaView style={styles.root} edges={['top']}>
         <View style={{ flex: 1 }}>
-          <OrderListScreen
-            orders={orders}
-            onOpen={setOpenId}
-            loading={loading}
-            loadingMore={loadingMore}
-            hasMore={hasMore}
-            total={total}
-            error={error}
-            dateFrom={dateFrom}
-            dateTo={dateTo}
-            onChangeDateFrom={setDateFrom}
-            onChangeDateTo={setDateTo}
-            onRetry={refresh}
-            onLoadMore={handleLoadMore}
-            onScanPress={() => setScannerOpen(true)}
-            currentUserName={session.user.ten}
-            onLogout={onLogout}
-            search={search}
-            onChangeSearch={setSearch}
-            filter={filter}
-            onChangeFilter={setFilter}
-            counts={counts}
-            chayCuaOnly={chayCuaOnly}
-            onChangeChayCuaOnly={setChayCuaOnly}
-            shipping={shipping}
-            onChangeShipping={setShipping}
-            shippingCounts={shippingCounts}
-            warehouse={warehouse}
-            onChangeWarehouse={setWarehouse}
-            warehouses={warehouses}
-          />
+          {tab === 'home' ? (
+            <OrderListScreen
+              orders={orders}
+              onOpen={setOpenId}
+              loading={loading}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
+              total={total}
+              error={error}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onChangeDateFrom={setDateFrom}
+              onChangeDateTo={setDateTo}
+              onRetry={refresh}
+              onLoadMore={handleLoadMore}
+              onScanPress={() => setScannerOpen(true)}
+              search={search}
+              onChangeSearch={setSearch}
+              filter={filter}
+              onChangeFilter={setFilter}
+              counts={counts}
+              chayCuaOnly={chayCuaOnly}
+              onChangeChayCuaOnly={setChayCuaOnly}
+              shipping={shipping}
+              onChangeShipping={setShipping}
+              shippingCounts={shippingCounts}
+              warehouse={warehouse}
+              onChangeWarehouse={setWarehouse}
+              warehouses={warehouses}
+            />
+          ) : (
+            <SettingsScreen user={session.user} token={session.token} onLogout={onLogout} />
+          )}
+
+          <View style={styles.tabBar}>
+            <Pressable style={styles.tabBtn} onPress={() => setTab('home')}>
+              <Ionicons name={tab === 'home' ? 'home' : 'home-outline'} size={22} color={tab === 'home' ? colors.blue : colors.text3} />
+              <Text style={[styles.tabLabel, tab === 'home' && styles.tabLabelActive]}>Trang chủ</Text>
+            </Pressable>
+            <Pressable style={styles.tabBtn} onPress={() => setTab('settings')}>
+              <Ionicons name={tab === 'settings' ? 'settings' : 'settings-outline'} size={22} color={tab === 'settings' ? colors.blue : colors.text3} />
+              <Text style={[styles.tabLabel, tab === 'settings' && styles.tabLabelActive]}>Cấu hình</Text>
+            </Pressable>
+          </View>
+
           <OrderDetailModal
             order={currentOrder}
             saving={saving}
@@ -306,4 +323,8 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   bootRoot: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  tabBar: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingTop: 8, paddingBottom: 8 },
+  tabBtn: { flex: 1, alignItems: 'center', gap: 3 },
+  tabLabel: { fontSize: 11, color: colors.text3, fontWeight: '600' },
+  tabLabelActive: { color: colors.blue },
 });

@@ -107,6 +107,30 @@ export async function fetchWarehouses(
   return data.warehouses;
 }
 
+export async function fetchSlaSettings(): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/api/settings`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Lỗi tải cấu hình (${res.status})`);
+  }
+  const data = await res.json();
+  return data.slaDeliveryMinutes;
+}
+
+export async function updateSlaSettings(minutes: number, token: string): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ slaDeliveryMinutes: minutes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Lỗi cập nhật cấu hình (${res.status})`);
+  }
+  const data = await res.json();
+  return data.slaDeliveryMinutes;
+}
+
 export async function findOrder(docNo: string): Promise<Order> {
   const res = await fetch(`${API_BASE_URL}/api/orders/find/${encodeURIComponent(docNo)}`);
   if (!res.ok) {

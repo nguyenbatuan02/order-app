@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { STATUSES } from '../data/constants';
 import { colors, colorSets, radius } from '../theme';
 import { Badge, MiniBadge } from './Badge';
+import SlaBadge from './SlaBadge';
 import Timeline from './Timeline';
 import type { Order, OrderItem } from '../types/order';
 
@@ -268,6 +269,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             {mix && <MiniBadge bg={colors.amberBg} text={colors.amberText} label="Đơn gộp" />}
           </View>
           <Text style={styles.headSub}>Tạo lúc {order.time} · {order.items.length} sản phẩm</Text>
+          <View style={{ marginTop: 6 }}><SlaBadge order={order} /></View>
         </View>
         <Pressable style={styles.closeBtn} onPress={onClose}>
           <Ionicons name="close" size={20} color={colors.text2} />

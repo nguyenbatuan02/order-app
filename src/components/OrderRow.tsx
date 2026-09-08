@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { STATUSES } from '../data/constants';
 import { colors, colorSets } from '../theme';
 import { Badge, MiniBadge } from './Badge';
+import SlaBadge from './SlaBadge';
 import type { Order } from '../types/order';
 
 function shippingBadgeStyle(shipping: string) {
@@ -25,7 +26,7 @@ export default function OrderRow({ order, onPress }: { order: Order; onPress: ()
         <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />
       </View>
       <View style={styles.bottomLine}>
-        <View style={{ flex: 1 }} />
+        <View style={{ flex: 1 }}><SlaBadge order={order} /></View>
         <MiniBadge bg={shipStyle.bg} text={shipStyle.text} label={order.shippingLabel} />
       </View>
     </Pressable>
