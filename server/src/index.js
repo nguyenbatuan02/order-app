@@ -115,6 +115,35 @@ function mapDocStatus(docStatus) {
   return 'congno';
 }
 
+// "Cần sửa đơn": đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng nhặt được (QuantityWarehouse)
+// vẫn ít hơn số lượng yêu cầu (QuantityRequest), với đơn chưa đóng gói xong (DocStatus < 4).
+// Không tính dòng thuộc nhóm DỊCH VỤ (không có tồn kho).
+const SHORTAGE_EXISTS_SQL = `EXISTS (
+  SELECT 1 FROM B30AccDocSales sct
+  LEFT JOIN B20Item si ON si.Code = sct.ItemCode
+  WHERE sct.Stt = h.Stt
+    AND sct.Thoigiankho IS NOT NULL
+    AND sct.QuantityWarehouse IS NOT NULL
+    AND sct.QuantityWarehouse < sct.QuantityRequest
+    AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
+)`;
+
+function computeStatus(docStatus, hasShortage) {
+  if (hasShortage && docStatus < 4) return 'suachờ';
+  return mapDocStatus(docStatus);
+}
+
+// Trả về mệnh đề WHERE lọc theo trạng thái app (bao gồm 'suachờ' suy ra từ thiếu hàng, không phải cột DB thật).
+function statusFilterClause(status) {
+  if (!status) return '';
+  if (status === 'suachờ') return `AND h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL}`;
+  const docStatusList = STATUS_TO_DOCSTATUS[status];
+  if (!docStatusList) return 'AND 1=0';
+  const base = `AND h.DocStatus IN (${docStatusList.join(',')})`;
+  if (status === 'congno') return base;
+  return `${base} AND NOT (h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL})`;
+}
+
 function pad2(n) { return String(n).padStart(2, '0'); }
 
 function fmtTime(dt) {
@@ -141,6 +170,7 @@ const ORDER_ROWS_SELECT = `
     c.Name AS CustomerName, c.Tel AS CustomerTel, COALESCE(c.Address, h.Address2, '') AS CustomerAddress,
     h.Goi_Vc, h.WarehouseCode AS HeaderWarehouseCode, w.Name AS HeaderWarehouseName,
     ct.RowId, ct.ItemCode, ct.Description, ct.Quantity, ct.UnitPrice, ct.LocationCode,
+    ct.QuantityRequest, ct.QuantityWarehouse,
     ct.WarehouseCode AS ItemWarehouseCode, wi.Name AS ItemWarehouseName,
     i.ItemCatgCode,
     ct.Thoigiankho, ct.Nvkho, ct.Thoigiandonggoi, ct.Nvdonggoi, ct.Thoigianvanchuyen, ct.NvVanchuyen
@@ -170,8 +200,9 @@ function rowsToOrders(rows) {
         docDate: row.DocDate,
         customer: row.CustomerName || row.CustomerCode,
         phone: row.CustomerTel || '',
-        status: mapDocStatus(row.DocStatus),
+        status: null, // xác định sau khi duyệt hết các dòng (cần biết có thiếu hàng hay không)
         docStatus: row.DocStatus,
+        _hasShortage: false,
         addr: row.CustomerAddress || '',
         time: fmtTime(row.CreatedAt),
         date: fmtDate(row.DocDate),
@@ -190,6 +221,11 @@ function rowsToOrders(rows) {
 
     // Bỏ các dòng thuộc nhóm DỊCH VỤ (cước vận chuyển...) — không có tồn kho, không cần nhặt/đóng gói.
     if (SERVICE_CATG_CODES.includes(row.ItemCatgCode)) continue;
+
+    // Thiếu hàng thật: đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng nhặt được vẫn chưa đủ yêu cầu.
+    if (row.Thoigiankho && row.QuantityWarehouse != null && row.QuantityWarehouse < row.QuantityRequest) {
+      order._hasShortage = true;
+    }
 
     order.items.push({
       rowId: row.RowId,
@@ -225,6 +261,8 @@ function rowsToOrders(rows) {
   }
   for (const order of ordersByDoc.values()) {
     delete order._loggedStages;
+    order.status = computeStatus(order.docStatus, order._hasShortage);
+    delete order._hasShortage;
     applySla(order);
   }
   return Array.from(ordersByDoc.values());
@@ -291,8 +329,7 @@ app.get('/api/orders/list', async (req, res) => {
   const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 20));
   const offset = (page - 1) * pageSize;
 
-  const docStatusList = STATUS_TO_DOCSTATUS[status];
-  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : (status ? 'AND 1=0' : '');
+  const statusClause = statusFilterClause(status);
   const searchTerm = typeof q === 'string' ? q.trim() : '';
   const searchClause = searchTerm
     ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)`
@@ -404,22 +441,26 @@ app.get('/api/orders/summary', async (req, res) => {
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
     const wClause = warehouseClause(request, warehouseCodes);
     const result = await request.query(`
-        SELECT h.DocStatus, COUNT(DISTINCT h.DocNo) AS cnt
-        FROM B30AccDoc h
-        LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
-        WHERE h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
-          AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
-          AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
-          ${searchClause}
-          ${chayCuaClause}
-          ${shippingClause}
-          ${wClause}
-        GROUP BY h.DocStatus
+        SELECT DocStatus, HasShortage, COUNT(DISTINCT DocNo) AS cnt
+        FROM (
+          SELECT DISTINCT h.DocNo, h.DocStatus,
+            (CASE WHEN h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL} THEN 1 ELSE 0 END) AS HasShortage
+          FROM B30AccDoc h
+          LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
+          WHERE h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
+            AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
+            AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
+            ${searchClause}
+            ${chayCuaClause}
+            ${shippingClause}
+            ${wClause}
+        ) t
+        GROUP BY DocStatus, HasShortage
       `);
 
     const counts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0 };
     for (const row of result.recordset) {
-      counts[mapDocStatus(row.DocStatus)] += row.cnt;
+      counts[computeStatus(row.DocStatus, row.HasShortage === 1)] += row.cnt;
     }
     res.json({ counts });
   } catch (err) {
@@ -440,8 +481,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
   const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
   const chayCuaClause = chayCuaOnly ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')` : '';
-  const docStatusList = STATUS_TO_DOCSTATUS[status];
-  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : (status ? 'AND 1=0' : '');
+  const statusClause = statusFilterClause(status);
   const warehouseCodes = parseWarehouseCodes(warehouse);
 
   try {
@@ -487,8 +527,7 @@ app.get('/api/orders/warehouses', async (req, res) => {
   const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
   const chayCuaClause = chayCuaOnly ? `AND ct.ItemCode LIKE '%-CC'` : '';
-  const docStatusList = STATUS_TO_DOCSTATUS[status];
-  const statusClause = docStatusList ? `AND h.DocStatus IN (${docStatusList.join(',')})` : (status ? 'AND 1=0' : '');
+  const statusClause = statusFilterClause(status);
   const shippingClause = shipping === 'TH' || shipping === 'EX'
     ? `AND h.Goi_Vc = '${shipping}'`
     : shipping === 'PICKUP'
