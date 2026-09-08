@@ -218,9 +218,31 @@ function rowsToOrders(rows) {
     }
     const order = ordersByDoc.get(row.DocNo);
     const docStatus = row.DocStatus;
+    const isService = SERVICE_CATG_CODES.includes(row.ItemCatgCode);
 
-    // Bỏ các dòng thuộc nhóm DỊCH VỤ (cước vận chuyển...) — không có tồn kho, không cần nhặt/đóng gói.
-    if (SERVICE_CATG_CODES.includes(row.ItemCatgCode)) continue;
+    // Chỉ hiện các bước tiến trình khớp với DocStatus thực tế — DB có thể chứa timestamp
+    // "ảo" vượt quá trạng thái hiện tại (dữ liệu import/test cũ), không phản ánh đúng đã xảy ra.
+    // Chỉ ghi 1 lần mỗi bước cho cả đơn (không lặp lại theo từng dòng sản phẩm).
+    // Ghi trước phần lọc dịch vụ bên dưới — nếu không, đơn chỉ toàn dòng dịch vụ (vd cước vận chuyển)
+    // sẽ không bao giờ hiện được tiến trình dù DocStatus đã hoàn tất.
+    const loggedStages = order._loggedStages || (order._loggedStages = new Set());
+    if (docStatus >= 2 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
+      loggedStages.add('xacnhan');
+      order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
+    }
+    if (docStatus >= 3 && row.Thoigiandonggoi && !loggedStages.has('donggoi')) {
+      loggedStages.add('donggoi');
+      order.log.push({ stage: 'donggoi', person: row.Nvdonggoi || '', time: fmtDateTime(row.Thoigiandonggoi) });
+    }
+    if (docStatus >= 4 && row.Thoigianvanchuyen && !loggedStages.has('dieuvan')) {
+      loggedStages.add('dieuvan');
+      order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
+      order._deliveredAtRaw = row.Thoigianvanchuyen;
+    }
+
+    // Bỏ các dòng thuộc nhóm DỊCH VỤ (cước vận chuyển...) — không có tồn kho, không cần nhặt/đóng gói,
+    // không hiện trong danh sách sản phẩm và không tính vào việc phát hiện thiếu hàng.
+    if (isService) continue;
 
     // Thiếu hàng thật: đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng nhặt được vẫn chưa đủ yêu cầu.
     if (row.Thoigiankho && row.QuantityWarehouse != null && row.QuantityWarehouse < row.QuantityRequest) {
@@ -240,24 +262,6 @@ function rowsToOrders(rows) {
       price: row.UnitPrice,
       done: docStatus >= 3 && !!row.Thoigiandonggoi,
     });
-
-    // Chỉ hiện các bước tiến trình khớp với DocStatus thực tế — DB có thể chứa timestamp
-    // "ảo" vượt quá trạng thái hiện tại (dữ liệu import/test cũ), không phản ánh đúng đã xảy ra.
-    // Chỉ ghi 1 lần mỗi bước cho cả đơn (không lặp lại theo từng dòng sản phẩm).
-    const loggedStages = order._loggedStages || (order._loggedStages = new Set());
-    if (docStatus >= 2 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
-      loggedStages.add('xacnhan');
-      order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
-    }
-    if (docStatus >= 3 && row.Thoigiandonggoi && !loggedStages.has('donggoi')) {
-      loggedStages.add('donggoi');
-      order.log.push({ stage: 'donggoi', person: row.Nvdonggoi || '', time: fmtDateTime(row.Thoigiandonggoi) });
-    }
-    if (docStatus >= 4 && row.Thoigianvanchuyen && !loggedStages.has('dieuvan')) {
-      loggedStages.add('dieuvan');
-      order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
-      order._deliveredAtRaw = row.Thoigianvanchuyen;
-    }
   }
   for (const order of ordersByDoc.values()) {
     delete order._loggedStages;
