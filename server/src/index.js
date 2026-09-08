@@ -14,6 +14,26 @@ const DOC_CODES = ['HD', 'H2', 'XK', 'DV', 'TL', 'R2'];
 // In-memory session store (token -> user). Đủ dùng cho app nội bộ quy mô nhỏ.
 const sessions = new Map();
 
+// Cấu hình chung của app (in-memory — reset về mặc định mỗi khi server redeploy).
+const settings = {
+  slaDeliveryMinutes: 180, // SLA giao tới khách mặc định: 3 giờ
+};
+
+// GET /api/settings -> cấu hình hiện tại
+app.get('/api/settings', (req, res) => {
+  res.json({ slaDeliveryMinutes: settings.slaDeliveryMinutes });
+});
+
+// PUT /api/settings  (yêu cầu đăng nhập)  body: { slaDeliveryMinutes: number }
+app.put('/api/settings', requireAuth, (req, res) => {
+  const { slaDeliveryMinutes } = req.body || {};
+  if (typeof slaDeliveryMinutes !== 'number' || !Number.isFinite(slaDeliveryMinutes) || slaDeliveryMinutes <= 0) {
+    return res.status(400).json({ error: 'slaDeliveryMinutes phải là số phút dương' });
+  }
+  settings.slaDeliveryMinutes = Math.round(slaDeliveryMinutes);
+  res.json({ slaDeliveryMinutes: settings.slaDeliveryMinutes });
+});
+
 function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
@@ -161,6 +181,8 @@ function rowsToOrders(rows) {
         warehouseName: row.HeaderWarehouseName || row.HeaderWarehouseCode || '',
         items: [],
         log: [{ stage: 'tiepnhan', person: '', time: fmtDateTime(row.CreatedAt) }],
+        _createdAtRaw: row.CreatedAt,
+        _deliveredAtRaw: null,
       });
     }
     const order = ordersByDoc.get(row.DocNo);
@@ -198,10 +220,39 @@ function rowsToOrders(rows) {
     if (docStatus >= 4 && row.Thoigianvanchuyen && !loggedStages.has('dieuvan')) {
       loggedStages.add('dieuvan');
       order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
+      order._deliveredAtRaw = row.Thoigianvanchuyen;
     }
   }
-  for (const order of ordersByDoc.values()) delete order._loggedStages;
+  for (const order of ordersByDoc.values()) {
+    delete order._loggedStages;
+    applySla(order);
+  }
   return Array.from(ordersByDoc.values());
+}
+
+// SLA giao tới khách: tính từ lúc tiếp nhận đơn (CreatedAt) đến lúc hoàn tất vận chuyển (Thoigianvanchuyen).
+function applySla(order) {
+  const thresholdMinutes = settings.slaDeliveryMinutes;
+  const createdAt = order._createdAtRaw;
+  const deliveredAt = order._deliveredAtRaw;
+  delete order._createdAtRaw;
+  delete order._deliveredAtRaw;
+
+  order.slaThresholdMinutes = thresholdMinutes;
+  if (!createdAt) {
+    order.slaMinutes = null;
+    order.slaStatus = 'unknown';
+    return;
+  }
+  if (deliveredAt) {
+    const minutes = Math.round((new Date(deliveredAt) - new Date(createdAt)) / 60000);
+    order.slaMinutes = minutes;
+    order.slaStatus = minutes <= thresholdMinutes ? 'on_time' : 'late';
+  } else {
+    const minutesSoFar = Math.round((Date.now() - new Date(createdAt)) / 60000);
+    order.slaMinutes = minutesSoFar;
+    order.slaStatus = minutesSoFar > thresholdMinutes ? 'at_risk' : 'in_progress';
+  }
 }
 
 const STATUS_TO_DOCSTATUS = {
