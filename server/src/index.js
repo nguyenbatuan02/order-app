@@ -108,16 +108,22 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
+// Mapping chuẩn theo bảng danh mục B00DocStatus của Bravo:
+// 0=Lập phiếu, 1=Chờ duyệt (Đơn sửa lại, chờ xử lý), 2=Đã duyệt chờ hoàn thiện (Kho đã chuẩn bị),
+// 3=Hoàn thiện vật tư (Đã đóng gói xong), 4=Đã hoàn thiện (công nợ), 5=Đã khóa, 6=Khách đã nhận, 9=Đã hủy.
 function mapDocStatus(docStatus) {
-  if (docStatus <= 1) return 'tiepnhan';
+  if (docStatus === 9) return 'huy';
+  if (docStatus === 1) return 'suachờ';
+  if (docStatus <= 0) return 'tiepnhan';
   if (docStatus === 2) return 'chuanbi';
   if (docStatus === 3) return 'donggoi';
   return 'congno';
 }
 
-// "Cần sửa đơn": đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng nhặt được (QuantityWarehouse)
-// vẫn ít hơn số lượng yêu cầu (QuantityRequest), với đơn chưa đóng gói xong (DocStatus < 4).
-// Không tính dòng thuộc nhóm DỊCH VỤ (không có tồn kho).
+// "Cần sửa đơn" cũng được suy ra thêm khi: đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng
+// nhặt được (QuantityWarehouse) vẫn ít hơn yêu cầu (QuantityRequest), đơn chưa đóng gói (DocStatus < 4).
+// Đây là tín hiệu bổ sung bên cạnh DocStatus=1 (Bravo/sale tự đặt) — ví dụ kho tự phát hiện thiếu hàng
+// khi DocStatus vẫn đang là 0 hoặc 2. Không tính dòng thuộc nhóm DỊCH VỤ (không có tồn kho).
 const SHORTAGE_EXISTS_SQL = `EXISTS (
   SELECT 1 FROM B30AccDocSales sct
   LEFT JOIN B20Item si ON si.Code = sct.ItemCode
@@ -129,18 +135,22 @@ const SHORTAGE_EXISTS_SQL = `EXISTS (
 )`;
 
 function computeStatus(docStatus, hasShortage) {
+  const base = mapDocStatus(docStatus);
+  if (base === 'huy') return base; // đơn đã hủy, không xét thiếu hàng
   if (hasShortage && docStatus < 4) return 'suachờ';
-  return mapDocStatus(docStatus);
+  return base;
 }
 
-// Trả về mệnh đề WHERE lọc theo trạng thái app (bao gồm 'suachờ' suy ra từ thiếu hàng, không phải cột DB thật).
+// Trả về mệnh đề WHERE lọc theo trạng thái app.
 function statusFilterClause(status) {
   if (!status) return '';
-  if (status === 'suachờ') return `AND h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL}`;
+  if (status === 'suachờ') {
+    return `AND h.DocStatus <> 9 AND (h.DocStatus = 1 OR (h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL}))`;
+  }
   const docStatusList = STATUS_TO_DOCSTATUS[status];
   if (!docStatusList) return 'AND 1=0';
   const base = `AND h.DocStatus IN (${docStatusList.join(',')})`;
-  if (status === 'congno') return base;
+  if (status === 'congno' || status === 'huy') return base;
   return `${base} AND NOT (h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL})`;
 }
 
@@ -298,10 +308,11 @@ function applySla(order) {
 }
 
 const STATUS_TO_DOCSTATUS = {
-  tiepnhan: [0, 1],
+  tiepnhan: [0],
   chuanbi: [2],
   donggoi: [3],
-  congno: [4, 5],
+  congno: [4, 5, 6],
+  huy: [9],
 };
 
 // warehouse query param: chuỗi mã kho phân cách bởi dấu phẩy (multi-select)
@@ -462,7 +473,7 @@ app.get('/api/orders/summary', async (req, res) => {
         GROUP BY DocStatus, HasShortage
       `);
 
-    const counts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0 };
+    const counts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0, huy: 0 };
     for (const row of result.recordset) {
       counts[computeStatus(row.DocStatus, row.HasShortage === 1)] += row.cnt;
     }
@@ -662,7 +673,7 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
     const headerResult = await new sql.Request(tx)
       .input('docNo', sql.NVarChar, docNo)
       .query(`
-        SELECT h.Stt, h.DocCode, h.BranchCode, h.DocDate
+        SELECT h.Stt, h.DocCode, h.BranchCode, h.DocDate, h.DocStatus
         FROM B30AccDoc h
         WHERE h.DocNo = @docNo AND h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
       `);
@@ -672,8 +683,13 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
     }
 
-    // Chặn chuyển sang "Đã đóng gói" nếu còn dòng thiếu hàng chưa xử lý (đúng nguyên tắc:
-    // chỉ đóng gói khi mọi dòng QuantityWarehouse >= QuantityRequest).
+    // Chặn chuyển sang "Đã đóng gói" nếu đơn đang ở trạng thái "Cần sửa đơn" (DocStatus=1, do
+    // Bravo/sale tự đặt) hoặc còn dòng thiếu hàng chưa xử lý (đúng nguyên tắc: chỉ đóng gói khi
+    // mọi dòng QuantityWarehouse >= QuantityRequest).
+    if (step === 'donggoi' && header.DocStatus === 1) {
+      await tx.rollback();
+      return res.status(400).json({ error: 'Đơn đang ở trạng thái "Cần sửa đơn" — chưa thể chuyển sang Đã đóng gói' });
+    }
     if (step === 'donggoi') {
       const shortageResult = await new sql.Request(tx)
         .input('stt', sql.VarChar, header.Stt)
