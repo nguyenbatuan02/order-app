@@ -20,8 +20,7 @@ export function statusLabel(order: Order): string {
 
 export const STAGES: StageDef[] = [
   { key: 'tiepnhan', label: 'Tiếp nhận đơn' },
-  { key: 'xacnhan', label: 'Thủ kho xác nhận' },
-  { key: 'nhat', label: 'Nhặt hàng' },
+  { key: 'xacnhan', label: 'Thủ kho xác nhận (nhặt kho)' },
   { key: 'donggoi', label: 'Đóng gói' },
   { key: 'dieuvan', label: 'Điều vận / xuất phiếu' },
 ];
