@@ -672,6 +672,27 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
     }
 
+    // Chặn chuyển sang "Đã đóng gói" nếu còn dòng thiếu hàng chưa xử lý (đúng nguyên tắc:
+    // chỉ đóng gói khi mọi dòng QuantityWarehouse >= QuantityRequest).
+    if (step === 'donggoi') {
+      const shortageResult = await new sql.Request(tx)
+        .input('stt', sql.VarChar, header.Stt)
+        .query(`
+          SELECT TOP 1 sct.ItemCode
+          FROM B30AccDocSales sct
+          LEFT JOIN B20Item si ON si.Code = sct.ItemCode
+          WHERE sct.Stt = @stt
+            AND sct.Thoigiankho IS NOT NULL
+            AND sct.QuantityWarehouse IS NOT NULL
+            AND sct.QuantityWarehouse < sct.QuantityRequest
+            AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
+        `);
+      if (shortageResult.recordset.length > 0) {
+        await tx.rollback();
+        return res.status(400).json({ error: 'Đơn còn thiếu hàng (Cần sửa đơn) — chưa thể chuyển sang Đã đóng gói' });
+      }
+    }
+
     for (const item of items) {
       if (!item.rowId || !item.itemCode) continue;
       const request = new sql.Request(tx)

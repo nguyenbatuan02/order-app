@@ -188,17 +188,19 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     toastTimer.current = setTimeout(() => setToastShow(false), 3000);
   }
 
-  function stepForDocStatus(docStatus: number): OrderStep | null {
-    if (docStatus <= 1) return 'kho';
-    if (docStatus === 2) return 'donggoi';
-    if (docStatus === 3) return 'vanchuyen';
+  function stepForOrder(order: Order): OrderStep | null {
+    // Đơn đang "Cần sửa đơn" (thiếu hàng chưa xử lý) -> quay lại bước nhặt kho, không cho nhảy sang đóng gói.
+    if (order.status === 'suachờ') return 'kho';
+    if (order.docStatus <= 1) return 'kho';
+    if (order.docStatus === 2) return 'donggoi';
+    if (order.docStatus === 3) return 'vanchuyen';
     return null;
   }
 
   async function handleCompleteSimple(id: string, items: ItemQty[], diffs: Diff[]) {
     const order = orders.find((o) => o.id === id);
     if (!order) return;
-    const step = stepForDocStatus(order.docStatus);
+    const step = stepForOrder(order);
     if (!step) {
       showToast('Đơn đã hoàn tất, không có bước tiếp theo');
       return;
@@ -226,7 +228,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     try {
       const order = await findOrder(docNo);
 
-      if (order.docStatus > 1) {
+      if (order.docStatus > 1 && order.status !== 'suachờ') {
         const s = STATUSES.find((x) => x.id === order.status);
         showToast(`${docNo} đã qua bước nhặt kho (đang: ${s?.name ?? order.status})`);
         return;
