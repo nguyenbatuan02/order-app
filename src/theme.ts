@@ -18,6 +18,7 @@ export const colorSets: Record<string, { bg: string; text: string; dot: string }
   blue: { bg: colors.blueBg, text: colors.blueText, dot: colors.blue },
   teal: { bg: colors.tealBg, text: colors.tealText, dot: colors.teal },
   green: { bg: colors.greenBg, text: colors.greenText, dot: colors.green },
+  red: { bg: colors.redBg, text: colors.red, dot: colors.red },
 };
 
 export const radius = 12;

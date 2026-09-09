@@ -24,7 +24,7 @@ type ItemQty = { rowId: string; itemCode: string; quantity: number };
 
 const SESSION_KEY = 'session';
 const PAGE_SIZE = 20;
-const EMPTY_COUNTS: StatusCounts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0 };
+const EMPTY_COUNTS: StatusCounts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0, huy: 0 };
 const EMPTY_SHIPPING_COUNTS: ShippingCounts = { TH: 0, EX: 0, PICKUP: 0 };
 
 function toISODate(d: Date): string {
@@ -227,6 +227,11 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     setScannerOpen(false);
     try {
       const order = await findOrder(docNo);
+
+      if (order.status === 'huy') {
+        showToast(`${docNo} đã bị hủy, không thể nhặt kho`);
+        return;
+      }
 
       if (order.docStatus > 1 && order.status !== 'suachờ') {
         const s = STATUSES.find((x) => x.id === order.status);

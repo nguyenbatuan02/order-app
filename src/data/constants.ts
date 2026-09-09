@@ -1,12 +1,22 @@
-import type { StatusDef, StageDef } from '../types/order';
+import type { StatusDef, StageDef, Order } from '../types/order';
 
 export const STATUSES: StatusDef[] = [
-  { id: 'tiepnhan', name: 'Lập phiếu (Tiếp nhận)', color: 'purple', icon: 'file' },
+  { id: 'tiepnhan', name: 'Đang nhặt hàng', color: 'purple', icon: 'file' },
   { id: 'suachờ', name: 'Đơn sửa lại, chờ xử lý', color: 'amber', icon: 'edit' },
-  { id: 'chuanbi', name: 'Kho đã chuẩn bị & chuyển xuống', color: 'blue', icon: 'box' },
+  { id: 'chuanbi', name: 'Đã đủ hàng', color: 'blue', icon: 'box' },
   { id: 'donggoi', name: 'Đã đóng gói xong', color: 'teal', icon: 'package' },
   { id: 'congno', name: 'Đã lên công nợ', color: 'green', icon: 'check' },
+  { id: 'huy', name: 'Đã hủy', color: 'red', icon: 'edit' },
 ];
+
+// Nhãn hiển thị theo từng đơn cụ thể — riêng "Đang nhặt hàng" đổi thành
+// "Đang nhặt hàng và chờ chạy cửa" nếu đơn có sản phẩm chạy cửa (mã -CC).
+export function statusLabel(order: Order): string {
+  if (order.status === 'tiepnhan' && order.items.some((it) => it.type === 'chaycua')) {
+    return 'Đang nhặt hàng và chờ chạy cửa';
+  }
+  return STATUSES.find((s) => s.id === order.status)?.name ?? order.status;
+}
 
 export const STAGES: StageDef[] = [
   { key: 'tiepnhan', label: 'Tiếp nhận đơn' },

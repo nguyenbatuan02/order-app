@@ -21,7 +21,7 @@ export interface LogEntry {
   note?: string;
 }
 
-export type OrderStatus = 'tiepnhan' | 'suachờ' | 'chuanbi' | 'donggoi' | 'congno';
+export type OrderStatus = 'tiepnhan' | 'suachờ' | 'chuanbi' | 'donggoi' | 'congno' | 'huy';
 
 export interface Order {
   id: string;
@@ -43,7 +43,7 @@ export interface Order {
   log: LogEntry[];
 }
 
-export type ColorKey = 'purple' | 'amber' | 'blue' | 'teal' | 'green';
+export type ColorKey = 'purple' | 'amber' | 'blue' | 'teal' | 'green' | 'red';
 export type IconKey = 'file' | 'edit' | 'box' | 'package' | 'check';
 
 export interface StatusDef {

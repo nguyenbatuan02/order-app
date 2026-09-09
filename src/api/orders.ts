@@ -42,6 +42,7 @@ export interface StatusCounts {
   chuanbi: number;
   donggoi: number;
   congno: number;
+  huy: number;
 }
 
 export async function fetchOrderSummary(

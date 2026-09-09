@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { STATUSES } from '../data/constants';
+import { STATUSES, statusLabel } from '../data/constants';
 import { colors, colorSets, radius } from '../theme';
 import { Badge, MiniBadge } from './Badge';
 import SlaBadge from './SlaBadge';
@@ -49,7 +49,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   const s = STATUSES.find((x) => x.id === order.status)!;
   const c = colorSets[s.color];
   const mix = hasChaycua(order) && hasNoibo(order);
-  const canComplete = order.status !== 'congno';
+  const canComplete = order.status !== 'congno' && order.status !== 'huy';
 
   function setMode(mode: CompleteMode) {
     setCompleteMode(mode);
@@ -158,6 +158,15 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
           </Pressable>
         </View>
     );
+  } else if (order.status === 'huy') {
+    completeBlock = (
+      <View style={styles.completeSection}>
+        <View style={[styles.callout, styles.calloutWarn]}>
+          <Ionicons name="close-circle-outline" size={17} color={colors.amberText} />
+          <Text style={[styles.calloutText, { color: colors.amberText }]}>Đơn đã bị hủy, không cần xử lý thêm.</Text>
+        </View>
+      </View>
+    );
   } else {
     completeBlock = (
       <View style={styles.completeSection}>
@@ -189,7 +198,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
         <View style={styles.infoGrid}>
           <View style={styles.infoItem}>
             <Text style={styles.infoLabel}>Trạng thái</Text>
-            <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />
+            <Badge bg={c.bg} text={c.text} dot={c.dot} label={statusLabel(order)} />
           </View>
           <View style={styles.infoItem}><Text style={styles.infoLabel}>Vận chuyển</Text><Text style={styles.infoValue}>{order.shippingLabel}</Text></View>
           <View style={styles.infoItem}>

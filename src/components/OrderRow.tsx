@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { STATUSES } from '../data/constants';
+import { STATUSES, statusLabel } from '../data/constants';
 import { colors, colorSets } from '../theme';
 import { Badge, MiniBadge } from './Badge';
 import SlaBadge from './SlaBadge';
@@ -23,7 +23,7 @@ export default function OrderRow({ order, onPress }: { order: Order; onPress: ()
           <Text style={styles.id}>{order.id}</Text>
           <Text style={styles.time}>{order.time}</Text>
         </View>
-        <Badge bg={c.bg} text={c.text} dot={c.dot} label={s.name} />
+        <Badge bg={c.bg} text={c.text} dot={c.dot} label={statusLabel(order)} />
       </View>
       <View style={styles.bottomLine}>
         <View style={{ flex: 1 }}><SlaBadge order={order} /></View>
