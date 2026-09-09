@@ -21,6 +21,14 @@ interface Props {
 function hasChaycua(o: Order) { return o.items.some((it) => it.type === 'chaycua'); }
 function hasNoibo(o: Order) { return o.items.some((it) => it.type === 'noibo'); }
 
+// Chỉ để hiển thị đúng tên bước sắp xác nhận trên nút — logic quyết định bước thật nằm ở App.tsx.
+function nextStepLabel(o: Order): string {
+  if (o.status === 'suachờ' || o.docStatus <= 1) return 'đã nhặt kho';
+  if (o.docStatus === 2) return 'đã đóng gói';
+  if (o.docStatus === 3) return 'đã vận chuyển';
+  return 'hoàn thành';
+}
+
 export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple }: Props) {
   const [qtys, setQtys] = useState<number[]>([]);
   // true = "Đủ" (khóa ô nhập, tự dùng SL yêu cầu) — false = "Thiếu" (mở ô nhập, kho tự gõ SL thực).
@@ -127,11 +135,13 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   const allSufficient = sufficient.every(Boolean);
 
+  const stepLabel = nextStepLabel(order);
+
   let completeBlock;
   if (canComplete) {
     completeBlock = (
       <View style={styles.completeSection}>
-          <Text style={styles.sectionLabel}>Xác nhận số lượng</Text>
+          <Text style={styles.sectionLabel}>Xác nhận số lượng — bước tiếp theo: {stepLabel}</Text>
           {allSufficient ? (
             <View style={[styles.callout, styles.calloutInfo]}>
               <Ionicons name="information-circle-outline" size={17} color={colors.blueText} />
@@ -156,7 +166,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             )}
           >
             <Ionicons name="checkmark" size={17} color="#fff" />
-            <Text style={styles.btnTealText}>{saving ? 'Đang lưu...' : 'Xác nhận hoàn thành'}</Text>
+            <Text style={styles.btnTealText}>{saving ? 'Đang lưu...' : `Xác nhận ${stepLabel}`}</Text>
           </Pressable>
         </View>
     );
