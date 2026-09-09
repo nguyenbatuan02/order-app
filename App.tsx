@@ -243,10 +243,6 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     }
   }
 
-  // Đơn gộp nội bộ/chạy cửa: dữ liệu thật hiện không phân biệt loại hàng nên nhánh này không kích hoạt trong thực tế.
-  function handleCompleteNoibo() {}
-  function handleCompleteChaycua() {}
-
   return (
       <SafeAreaView style={styles.root} edges={['top']}>
         <View style={{ flex: 1 }}>
@@ -300,8 +296,6 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
             saving={saving}
             onClose={() => setOpenId(null)}
             onCompleteSimple={handleCompleteSimple}
-            onCompleteNoibo={handleCompleteNoibo}
-            onCompleteChaycua={handleCompleteChaycua}
           />
           <BarcodeScannerModal
             visible={scannerOpen}

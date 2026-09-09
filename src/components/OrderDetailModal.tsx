@@ -17,27 +17,21 @@ interface Props {
   saving: boolean;
   onClose: () => void;
   onCompleteSimple: (id: string, items: ItemQty[], diffs: Diff[]) => void;
-  onCompleteNoibo: (id: string, mode: CompleteMode, diffs: Diff[]) => void;
-  onCompleteChaycua: (id: string) => void;
 }
 
 function hasChaycua(o: Order) { return o.items.some((it) => it.type === 'chaycua'); }
 function hasNoibo(o: Order) { return o.items.some((it) => it.type === 'noibo'); }
-function noiboAllDone(o: Order) { return o.items.filter((it) => it.type === 'noibo').every((it) => it.done); }
-function chaycuaAllDone(o: Order) { return o.items.filter((it) => it.type === 'chaycua').every((it) => it.done); }
 
-export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple, onCompleteNoibo, onCompleteChaycua }: Props) {
+export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple }: Props) {
   const [completeMode, setCompleteMode] = useState<CompleteMode>('full');
   const [qtys, setQtys] = useState<number[]>([]);
   const [enabled, setEnabled] = useState<boolean[]>([]);
-  const [nbEditing, setNbEditing] = useState(false);
 
   useEffect(() => {
     if (!order) return;
     setCompleteMode('full');
     setQtys(order.items.map((it) => it.req));
     setEnabled(order.items.map(() => false));
-    setNbEditing(false);
   }, [order?.id]);
 
   const activeDiffs: Diff[] = useMemo(() => {
@@ -66,12 +60,6 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
     } else {
       setEnabled(order.items.map(() => true));
     }
-  }
-
-  function enableEditNoibo() {
-    if (!order) return;
-    setNbEditing(true);
-    setEnabled(order.items.map((it) => it.type === 'noibo'));
   }
 
   function qtyChange(i: number, val: number) {
@@ -123,86 +111,8 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   let completeBlock;
   if (canComplete) {
-    if (mix) {
-      const nbDone = noiboAllDone(order);
-      const ccDone = chaycuaAllDone(order);
-      completeBlock = (
-        <View style={styles.completeSection}>
-          <Text style={styles.sectionLabel}>Hoàn thành theo giai đoạn</Text>
-          <View style={[styles.callout, styles.calloutInfo]}>
-            <Ionicons name="information-circle-outline" size={17} color={colors.blueText} />
-            <Text style={[styles.calloutText, { color: colors.blueText }]}>
-              Đơn gộp cả hàng nội bộ và chạy cửa. Hoàn thành phần nội bộ trước; phần chạy cửa xác nhận sau khi hàng mua ngoài về kho.
-            </Text>
-          </View>
-
-          <View style={[styles.splitBox, nbDone && styles.splitBoxDone]}>
-            <View style={styles.splitHead}>
-              <View style={styles.splitTitleRow}>
-                <MiniBadge bg={colors.tealBg} text={colors.tealText} label="Nội bộ" />
-                <Text style={styles.splitTitle}>Hàng có sẵn</Text>
-              </View>
-              {nbDone && <MiniBadge bg={colors.greenBg} text={colors.greenText} label="Đã xong" />}
-            </View>
-            <Text style={styles.splitDesc}>Xác nhận đủ số lượng sale yêu cầu cho phần hàng trong kho.</Text>
-            {!nbDone && !nbEditing && (
-              <View style={styles.rowGap}>
-                <Pressable style={[styles.btn, styles.btnTeal, styles.btnSm]} onPress={() => onCompleteNoibo(order.id, 'full', [])}>
-                  <Ionicons name="checkmark" size={15} color="#fff" />
-                  <Text style={styles.btnTealText}>Hoàn thành đủ SL</Text>
-                </Pressable>
-                <Pressable style={[styles.btn, styles.btnGhost, styles.btnSm]} onPress={enableEditNoibo}>
-                  <Text style={styles.btnGhostText}>Sửa số lượng</Text>
-                </Pressable>
-              </View>
-            )}
-            {!nbDone && nbEditing && (
-              <View>
-                <View style={[styles.callout, styles.calloutWarn, { marginTop: 12 }]}>
-                  <Ionicons name="warning-outline" size={17} color={colors.amberText} />
-                  <Text style={[styles.calloutText, { color: colors.amberText }]}>Chỉnh ô "SL thực" ở phần hàng nội bộ. Chênh lệch sẽ tự báo sale.</Text>
-                </View>
-                {diffSummary(activeDiffs)}
-                <Pressable style={[styles.btn, styles.btnTeal, styles.btnSm, { marginTop: 12 }]} onPress={() => onCompleteNoibo(order.id, 'edit', activeDiffs)}>
-                  <Ionicons name="checkmark" size={15} color="#fff" />
-                  <Text style={styles.btnTealText}>Xác nhận phần nội bộ</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-
-          <View style={[styles.splitBox, ccDone && styles.splitBoxDone]}>
-            <View style={styles.splitHead}>
-              <View style={styles.splitTitleRow}>
-                <MiniBadge bg={colors.amberBg} text={colors.amberText} label="Chạy cửa" />
-                <Text style={styles.splitTitle}>Hàng mua ngoài</Text>
-              </View>
-              {ccDone
-                ? <MiniBadge bg={colors.greenBg} text={colors.greenText} label="Đã về · xong" />
-                : <MiniBadge bg={colors.amberBg} text={colors.amberText} label="Chờ hàng về" />}
-            </View>
-            <Text style={styles.splitDesc}>
-              {ccDone ? 'Hàng mua ngoài đã về kho và được xác nhận.' : 'Bấm nút bên dưới khi hàng mua ngoài đã ship về đến kho.'}
-            </Text>
-            {!ccDone && (
-              <>
-                <Pressable
-                  style={[styles.btn, styles.btnAmber, styles.btnSm, { marginTop: 12 }, !nbDone && styles.btnDisabled]}
-                  disabled={!nbDone}
-                  onPress={() => onCompleteChaycua(order.id)}
-                >
-                  <Ionicons name="arrow-forward" size={15} color="#fff" />
-                  <Text style={styles.btnTealText}>Xác nhận hàng chạy cửa đã về</Text>
-                </Pressable>
-                {!nbDone && <Text style={styles.hint}>Hoàn thành phần nội bộ trước để mở nút này.</Text>}
-              </>
-            )}
-          </View>
-        </View>
-      );
-    } else {
-      completeBlock = (
-        <View style={styles.completeSection}>
+    completeBlock = (
+      <View style={styles.completeSection}>
           <Text style={styles.sectionLabel}>Cơ chế hoàn thành đơn</Text>
           <View style={styles.modeTabs}>
             <Pressable style={[styles.modeTab, completeMode === 'full' && styles.modeTabActive]} onPress={() => setMode('full')}>
@@ -247,8 +157,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             <Text style={styles.btnTealText}>{saving ? 'Đang lưu...' : 'Xác nhận hoàn thành'}</Text>
           </Pressable>
         </View>
-      );
-    }
+    );
   } else {
     completeBlock = (
       <View style={styles.completeSection}>
