@@ -8,7 +8,6 @@ import SlaBadge from './SlaBadge';
 import Timeline from './Timeline';
 import type { Order, OrderItem } from '../types/order';
 
-type CompleteMode = 'full' | 'edit';
 type Diff = { name: string; req: number; val: number };
 type ItemQty = { rowId: string; itemCode: string; quantity: number };
 
@@ -23,26 +22,25 @@ function hasChaycua(o: Order) { return o.items.some((it) => it.type === 'chaycua
 function hasNoibo(o: Order) { return o.items.some((it) => it.type === 'noibo'); }
 
 export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple }: Props) {
-  const [completeMode, setCompleteMode] = useState<CompleteMode>('full');
   const [qtys, setQtys] = useState<number[]>([]);
-  const [enabled, setEnabled] = useState<boolean[]>([]);
+  // true = "Đủ" (khóa ô nhập, tự dùng SL yêu cầu) — false = "Thiếu" (mở ô nhập, kho tự gõ SL thực).
+  const [sufficient, setSufficient] = useState<boolean[]>([]);
 
   useEffect(() => {
     if (!order) return;
-    setCompleteMode('full');
     setQtys(order.items.map((it) => it.req));
-    setEnabled(order.items.map(() => false));
+    setSufficient(order.items.map(() => true));
   }, [order?.id]);
 
   const activeDiffs: Diff[] = useMemo(() => {
     if (!order) return [];
     const diffs: Diff[] = [];
     order.items.forEach((it, i) => {
-      if (!enabled[i]) return;
+      if (sufficient[i]) return;
       if (qtys[i] !== it.req) diffs.push({ name: it.name, req: it.req, val: qtys[i] });
     });
     return diffs;
-  }, [order, enabled, qtys]);
+  }, [order, sufficient, qtys]);
 
   if (!order) return null;
 
@@ -51,48 +49,66 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   const mix = hasChaycua(order) && hasNoibo(order);
   const canComplete = order.status !== 'congno' && order.status !== 'huy';
 
-  function setMode(mode: CompleteMode) {
-    setCompleteMode(mode);
-    if (!order) return;
-    if (mode === 'full') {
-      setQtys(order.items.map((it) => it.req));
-      setEnabled(order.items.map(() => false));
-    } else {
-      setEnabled(order.items.map(() => true));
-    }
+  function toggleSufficient(i: number) {
+    setSufficient((prev) => {
+      const next = prev.slice();
+      next[i] = !next[i];
+      return next;
+    });
+    setQtys((prev) => {
+      const next = prev.slice();
+      const wasSufficient = sufficient[i];
+      const it = order!.items[i];
+      // Vừa chuyển sang "Thiếu": xóa về 0 để kho gõ số thực. Vừa chuyển lại "Đủ": trả về SL yêu cầu.
+      next[i] = wasSufficient ? 0 : it.req;
+      return next;
+    });
   }
 
   function qtyChange(i: number, val: number) {
     setQtys((prev) => { const next = prev.slice(); next[i] = val; return next; });
   }
 
-  const renderItem = (it: OrderItem, idx: number) => (
-    <View style={[styles.itemLine, it.type === 'chaycua' ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.itemName}>{it.name}</Text>
-        <Text style={styles.itemSub}>{it.sku} · Kệ {it.shelf}</Text>
-        {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
+  const renderItem = (it: OrderItem, idx: number) => {
+    const isSufficient = sufficient[idx];
+    return (
+      <View style={[styles.itemLine, it.type === 'chaycua' ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
+        <Pressable style={styles.checkCol} onPress={() => toggleSufficient(idx)}>
+          <Ionicons
+            name={isSufficient ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={isSufficient ? colors.green : colors.amber}
+          />
+          <Text style={[styles.checkLabel, { color: isSufficient ? colors.greenText : colors.amberText }]}>
+            {isSufficient ? 'Đủ' : 'Thiếu'}
+          </Text>
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.itemName}>{it.name}</Text>
+          <Text style={styles.itemSub}>{it.sku} · Kệ {it.shelf}</Text>
+          {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
+        </View>
+        <View style={styles.qtyCol}>
+          <Text style={styles.qtyLabel}>SL yêu cầu</Text>
+          <Text style={styles.qtyValue}>{it.req}</Text>
+        </View>
+        <View style={styles.qtyCol}>
+          <Text style={styles.qtyLabel}>SL thực</Text>
+          <TextInput
+            style={[
+              styles.qtyInput,
+              !isSufficient && styles.qtyInputChanged,
+              isSufficient && styles.qtyInputDisabled,
+            ]}
+            keyboardType="number-pad"
+            editable={!isSufficient}
+            value={String(qtys[idx] ?? it.req)}
+            onChangeText={(t) => qtyChange(idx, parseInt(t) || 0)}
+          />
+        </View>
       </View>
-      <View style={styles.qtyCol}>
-        <Text style={styles.qtyLabel}>SL yêu cầu</Text>
-        <Text style={styles.qtyValue}>{it.req}</Text>
-      </View>
-      <View style={styles.qtyCol}>
-        <Text style={styles.qtyLabel}>SL thực</Text>
-        <TextInput
-          style={[
-            styles.qtyInput,
-            enabled[idx] && qtys[idx] !== it.req && styles.qtyInputChanged,
-            !enabled[idx] && styles.qtyInputDisabled,
-          ]}
-          keyboardType="number-pad"
-          editable={enabled[idx]}
-          value={String(qtys[idx] ?? it.req)}
-          onChangeText={(t) => qtyChange(idx, parseInt(t) || 0)}
-        />
-      </View>
-    </View>
-  );
+    );
+  };
 
   const diffSummary = (diffs: Diff[]) => diffs.length === 0 ? null : (
     <View style={styles.diffBox}>
@@ -109,37 +125,23 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   const noibo = order.items.map((it, i) => ({ it, i })).filter((x) => x.it.type === 'noibo');
   const chaycua = order.items.map((it, i) => ({ it, i })).filter((x) => x.it.type === 'chaycua');
 
+  const allSufficient = sufficient.every(Boolean);
+
   let completeBlock;
   if (canComplete) {
     completeBlock = (
       <View style={styles.completeSection}>
-          <Text style={styles.sectionLabel}>Cơ chế hoàn thành đơn</Text>
-          <View style={styles.modeTabs}>
-            <Pressable style={[styles.modeTab, completeMode === 'full' && styles.modeTabActive]} onPress={() => setMode('full')}>
-              <View style={styles.modeTitleRow}>
-                <Ionicons name="checkmark-circle-outline" size={16} color={completeMode === 'full' ? colors.tealText : colors.text} />
-                <Text style={[styles.modeTitle, completeMode === 'full' && { color: colors.tealText }]}>Hoàn thành toàn bộ</Text>
-              </View>
-              <Text style={styles.modeDesc}>Xác nhận đủ hàng đúng số lượng sale yêu cầu</Text>
-            </Pressable>
-            <Pressable style={[styles.modeTab, completeMode === 'edit' && styles.modeTabActive]} onPress={() => setMode('edit')}>
-              <View style={styles.modeTitleRow}>
-                <Ionicons name="create-outline" size={16} color={completeMode === 'edit' ? colors.tealText : colors.text} />
-                <Text style={[styles.modeTitle, completeMode === 'edit' && { color: colors.tealText }]}>Sửa số lượng</Text>
-              </View>
-              <Text style={styles.modeDesc}>Nhập số thực tế khi kho thiếu/lệch hàng</Text>
-            </Pressable>
-          </View>
-          {completeMode === 'full' ? (
+          <Text style={styles.sectionLabel}>Xác nhận số lượng</Text>
+          {allSufficient ? (
             <View style={[styles.callout, styles.calloutInfo]}>
               <Ionicons name="information-circle-outline" size={17} color={colors.blueText} />
-              <Text style={[styles.calloutText, { color: colors.blueText }]}>Toàn bộ sản phẩm được xác nhận đúng số lượng yêu cầu. Đơn chuyển bước tiếp theo ngay.</Text>
+              <Text style={[styles.calloutText, { color: colors.blueText }]}>Tick "Thiếu" ở dòng nào chưa đủ hàng rồi nhập SL thực. Mặc định mọi dòng đang tính là đủ.</Text>
             </View>
           ) : (
             <View>
               <View style={[styles.callout, styles.calloutWarn]}>
                 <Ionicons name="warning-outline" size={17} color={colors.amberText} />
-                <Text style={[styles.calloutText, { color: colors.amberText }]}>Chỉnh ô "SL thực" ở trên. Hệ thống tự báo sale phần chênh lệch để xử lý lại đơn.</Text>
+                <Text style={[styles.calloutText, { color: colors.amberText }]}>Có dòng đang thiếu hàng — nhập đúng SL thực. Hệ thống sẽ chuyển đơn sang "Cần sửa đơn" để Sale xử lý.</Text>
               </View>
               {diffSummary(activeDiffs)}
             </View>
@@ -292,11 +294,7 @@ const styles = StyleSheet.create({
   btnGhost: { backgroundColor: 'transparent' },
   btnGhostText: { color: colors.text, fontWeight: '600', fontSize: 14 },
   btnDisabled: { opacity: 0.45 },
-  modeTabs: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  modeTab: { flex: 1, padding: 12, borderWidth: 1.5, borderColor: colors.border, borderRadius: 11, backgroundColor: colors.surface },
-  modeTabActive: { borderColor: colors.teal, backgroundColor: colors.tealBg },
-  modeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  modeTitle: { fontSize: 13.5, fontWeight: '700', color: colors.text },
-  modeDesc: { fontSize: 11.5, color: colors.text2, marginTop: 5, lineHeight: 16 },
+  checkCol: { alignItems: 'center', width: 44, gap: 2 },
+  checkLabel: { fontSize: 10, fontWeight: '700' },
   modalFoot: { padding: 16, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.surface2 },
 });
