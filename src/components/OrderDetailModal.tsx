@@ -16,7 +16,7 @@ interface Props {
   order: Order | null;
   saving: boolean;
   onClose: () => void;
-  onCompleteSimple: (id: string, items: ItemQty[], diffs: Diff[]) => void;
+  onCompleteSimple: (id: string, items: ItemQty[], diffs: Diff[], reportShortage: boolean) => void;
   toastMsg: string;
   toastShow: boolean;
 }
@@ -154,23 +154,41 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             <View>
               <View style={[styles.callout, styles.calloutWarn]}>
                 <Ionicons name="warning-outline" size={17} color={colors.amberText} />
-                <Text style={[styles.calloutText, { color: colors.amberText }]}>Có dòng đang thiếu hàng — nhập đúng SL thực. Hệ thống sẽ chuyển đơn sang "Cần sửa đơn" để Sale xử lý.</Text>
+                <Text style={[styles.calloutText, { color: colors.amberText }]}>Có dòng đang thiếu hàng. Có thể lưu tạm để tiếp tục nhặt bổ sung, hoặc báo Sale xử lý nếu không thể nhặt đủ.</Text>
               </View>
               {diffSummary(activeDiffs)}
             </View>
           )}
-          <Pressable
-            style={[styles.btn, styles.btnTeal, { alignSelf: 'flex-end', marginTop: 16 }, saving && styles.btnDisabled]}
-            disabled={saving}
-            onPress={() => onCompleteSimple(
-              order.id,
-              order.items.map((it, i) => ({ rowId: it.rowId, itemCode: it.itemCode, quantity: qtys[i] ?? it.req })),
-              activeDiffs
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            {!allSufficient && (
+              <Pressable
+                style={[styles.btn, styles.btnAmber, saving && styles.btnDisabled]}
+                disabled={saving}
+                onPress={() => onCompleteSimple(
+                  order.id,
+                  order.items.map((it, i) => ({ rowId: it.rowId, itemCode: it.itemCode, quantity: qtys[i] ?? it.req })),
+                  activeDiffs,
+                  true
+                )}
+              >
+                <Ionicons name="alert-circle-outline" size={17} color="#fff" />
+                <Text style={styles.btnTealText}>{saving ? 'Đang lưu...' : 'Báo thiếu, cần Sale xử lý'}</Text>
+              </Pressable>
             )}
-          >
-            <Ionicons name="checkmark" size={17} color="#fff" />
-            <Text style={styles.btnTealText}>{saving ? 'Đang lưu...' : `Xác nhận ${stepLabel}`}</Text>
-          </Pressable>
+            <Pressable
+              style={[styles.btn, styles.btnTeal, saving && styles.btnDisabled]}
+              disabled={saving}
+              onPress={() => onCompleteSimple(
+                order.id,
+                order.items.map((it, i) => ({ rowId: it.rowId, itemCode: it.itemCode, quantity: qtys[i] ?? it.req })),
+                activeDiffs,
+                false
+              )}
+            >
+              <Ionicons name="checkmark" size={17} color="#fff" />
+              <Text style={styles.btnTealText}>{saving ? 'Đang lưu...' : allSufficient ? `Xác nhận ${stepLabel}` : 'Lưu tạm, tiếp tục nhặt'}</Text>
+            </Pressable>
+          </View>
         </View>
     );
   } else if (order.status === 'huy') {

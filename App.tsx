@@ -205,7 +205,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     return null;
   }
 
-  async function handleCompleteSimple(id: string, items: ItemQty[], diffs: Diff[]) {
+  async function handleCompleteSimple(id: string, items: ItemQty[], diffs: Diff[], reportShortage: boolean) {
     const order = currentOrder && currentOrder.id === id ? currentOrder : orders.find((o) => o.id === id);
     if (!order) {
       showToast('Không tìm thấy đơn hàng — vui lòng đóng và mở lại đơn rồi thử lại');
@@ -219,10 +219,12 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
     setSaving(true);
     try {
-      await completeOrderStep(id, step, session.token, items);
+      await completeOrderStep(id, step, session.token, items, reportShortage);
       setOpenId(null);
-      if (diffs.length > 0) {
+      if (diffs.length > 0 && reportShortage) {
         showToast(`Thiếu ${diffs.length} SP · Đơn ${id} chuyển sang "Cần sửa đơn" chờ Sale xử lý`);
+      } else if (diffs.length > 0) {
+        showToast(`Đã lưu tạm ${id} · còn thiếu ${diffs.length} SP, tiếp tục nhặt bổ sung`);
       } else {
         showToast(`Đã hoàn thành ${id} · đủ số lượng`);
       }

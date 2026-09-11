@@ -155,12 +155,13 @@ export async function completeOrderStep(
   docNo: string,
   step: OrderStep,
   token: string,
-  items: { rowId: string; itemCode: string; quantity?: number }[]
+  items: { rowId: string; itemCode: string; quantity?: number }[],
+  reportShortage?: boolean
 ): Promise<void> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/${encodeURIComponent(docNo)}/step`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ step, items }),
+    body: JSON.stringify({ step, items, reportShortage }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

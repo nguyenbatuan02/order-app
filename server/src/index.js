@@ -625,7 +625,7 @@ const STEP_CONFIG = {
 // body: { step: 'kho'|'donggoi'|'vanchuyen', items: [{ rowId, itemCode, quantity? }] }
 app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
   const { docNo } = req.params;
-  const { step, items } = req.body || {};
+  const { step, items, reportShortage } = req.body || {};
   const employee = req.user.ten;
 
   const cfg = STEP_CONFIG[step];
@@ -700,8 +700,12 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       `);
     }
 
-    // Bước "kho": tự quyết định đủ hay thiếu dựa trên số lượng thật vừa ghi — đủ thì DocStatus=2
-    // (Đã duyệt), thiếu thì DocStatus=1 (Cần sửa đơn) để Sale xử lý, thay vì luôn mặc định đủ.
+    // Bước "kho": tự quyết định đủ hay thiếu dựa trên số lượng thật vừa ghi.
+    // - Đủ hàng -> DocStatus=2 (Đã đủ hàng).
+    // - Thiếu hàng nhưng kho chỉ đang lưu tạm (chưa báo Sale) -> giữ nguyên DocStatus hiện tại,
+    //   để kho tiếp tục nhặt bổ sung và xác nhận lại sau.
+    // - Thiếu hàng và kho chủ động bấm "Báo thiếu, cần Sale xử lý" (reportShortage=true)
+    //   -> DocStatus=1 (Cần sửa đơn) để Sale xử lý.
     let finalDocStatus = cfg.docStatus;
     if (step === 'kho') {
       const shortageResult = await new sql.Request(tx)
@@ -715,7 +719,12 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
             AND sct.QuantityWarehouse < sct.QuantityRequest
             AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
         `);
-      finalDocStatus = shortageResult.recordset.length > 0 ? 1 : 2;
+      const hasShortage = shortageResult.recordset.length > 0;
+      if (hasShortage) {
+        finalDocStatus = reportShortage ? 1 : header.DocStatus;
+      } else {
+        finalDocStatus = 2;
+      }
     }
 
     await new sql.Request(tx)
