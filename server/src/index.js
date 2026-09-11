@@ -169,7 +169,7 @@ const ORDER_ROWS_SELECT = `
     ct.RowId, ct.ItemCode, ct.Description, ct.Quantity, ct.UnitPrice, ct.LocationCode,
     ct.QuantityRequest, ct.QuantityWarehouse,
     ct.WarehouseCode AS ItemWarehouseCode, wi.Name AS ItemWarehouseName,
-    i.ItemCatgCode, ii.Notes1 AS ItemShelfNotes,
+    i.ItemCatgCode, i.LocationLX AS ItemLocationLX, ii.Notes1 AS ItemShelfNotes,
     ct.Thoigiankho, ct.Nvkho, ct.Thoigiandonggoi, ct.Nvdonggoi, ct.Thoigianvanchuyen, ct.NvVanchuyen
   FROM B30AccDoc h
   JOIN B30AccDocSales ct ON ct.Stt = h.Stt
@@ -249,7 +249,12 @@ function rowsToOrders(rows) {
       name: row.Description,
       sku: row.ItemCode,
       req: row.Quantity,
-      shelf: row.ItemShelfNotes || row.LocationCode || '—',
+      // Kho Lai Xá (mã chứa "LX") lưu vị trí kệ riêng ở B20Item.LocationLX; các kho khác dùng
+      // B20ItemInfo.Notes1 (kiểu "CDD-A02-03-06"). LocationCode (B30AccDocSales) chỉ là fallback
+      // cuối vì chỉ có mã vùng ngắn, không có vị trí chi tiết.
+      shelf: (row.ItemWarehouseCode && row.ItemWarehouseCode.includes('LX')
+        ? row.ItemLocationLX
+        : row.ItemShelfNotes) || row.LocationCode || '—',
       type: row.ItemWarehouseCode === CHAYCUA_WAREHOUSE_CODE ? 'chaycua' : 'noibo',
       price: row.UnitPrice,
       done: docStatus >= 3 && !!row.Thoigiandonggoi,
