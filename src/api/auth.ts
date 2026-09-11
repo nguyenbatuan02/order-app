@@ -1,5 +1,11 @@
 const API_BASE_URL = 'http://161.248.80.30:3001';
 
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export interface AuthUser {
   ma: string;
   ten: string;
@@ -12,7 +18,7 @@ export interface Session {
 }
 
 export async function login(ma: string, matKhau: string): Promise<Session> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ma, mat_khau: matKhau }),
@@ -25,7 +31,7 @@ export async function login(ma: string, matKhau: string): Promise<Session> {
 }
 
 export async function logout(token: string): Promise<void> {
-  await fetch(`${API_BASE_URL}/api/auth/logout`, {
+  await fetchWithTimeout(`${API_BASE_URL}/api/auth/logout`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   }).catch(() => {});

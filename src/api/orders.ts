@@ -2,6 +2,14 @@ import type { Order } from '../types/order';
 
 const API_BASE_URL = 'http://161.248.80.30:3001';
 
+// Chặn request treo vô thời hạn khi mạng có vấn đề (mất kết nối tới server nhưng
+// không báo lỗi ngay) — quá thời gian này sẽ tự hủy và báo lỗi rõ ràng cho người dùng.
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export interface OrdersPage {
   orders: Order[];
   total: number;
@@ -28,7 +36,7 @@ export async function fetchOrders(
   if (chayCua) params.set('chayCua', '1');
   if (shipping) params.set('shipping', shipping);
   if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
-  const res = await fetch(`${API_BASE_URL}/api/orders/list?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/list?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải đơn hàng (${res.status})`);
@@ -53,7 +61,7 @@ export async function fetchOrderSummary(
   if (chayCua) params.set('chayCua', '1');
   if (shipping) params.set('shipping', shipping);
   if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
-  const res = await fetch(`${API_BASE_URL}/api/orders/summary?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/summary?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải tổng quan (${res.status})`);
@@ -76,7 +84,7 @@ export async function fetchShippingSummary(
   if (chayCua) params.set('chayCua', '1');
   if (status) params.set('status', status);
   if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
-  const res = await fetch(`${API_BASE_URL}/api/orders/shipping-summary?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/shipping-summary?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải tổng quan vận chuyển (${res.status})`);
@@ -99,7 +107,7 @@ export async function fetchWarehouses(
   if (chayCua) params.set('chayCua', '1');
   if (status) params.set('status', status);
   if (shipping) params.set('shipping', shipping);
-  const res = await fetch(`${API_BASE_URL}/api/orders/warehouses?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/warehouses?${params.toString()}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải danh sách kho (${res.status})`);
@@ -109,7 +117,7 @@ export async function fetchWarehouses(
 }
 
 export async function fetchSlaSettings(): Promise<number> {
-  const res = await fetch(`${API_BASE_URL}/api/settings`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/settings`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải cấu hình (${res.status})`);
@@ -119,7 +127,7 @@ export async function fetchSlaSettings(): Promise<number> {
 }
 
 export async function updateSlaSettings(minutes: number, token: string): Promise<number> {
-  const res = await fetch(`${API_BASE_URL}/api/settings`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/settings`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ slaDeliveryMinutes: minutes }),
@@ -133,7 +141,7 @@ export async function updateSlaSettings(minutes: number, token: string): Promise
 }
 
 export async function findOrder(docNo: string): Promise<Order> {
-  const res = await fetch(`${API_BASE_URL}/api/orders/find/${encodeURIComponent(docNo)}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/find/${encodeURIComponent(docNo)}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tra cứu đơn hàng (${res.status})`);
@@ -149,7 +157,7 @@ export async function completeOrderStep(
   token: string,
   items: { rowId: string; itemCode: string; quantity?: number }[]
 ): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/orders/${encodeURIComponent(docNo)}/step`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/${encodeURIComponent(docNo)}/step`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ step, items }),

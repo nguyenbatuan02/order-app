@@ -27,6 +27,14 @@ const PAGE_SIZE = 20;
 const EMPTY_COUNTS: StatusCounts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0, huy: 0 };
 const EMPTY_SHIPPING_COUNTS: ShippingCounts = { TH: 0, EX: 0, PICKUP: 0 };
 
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error) {
+    if (e.name === 'AbortError') return 'Kết nối server quá chậm hoặc mất mạng — thử lại nhé';
+    return e.message;
+  }
+  return fallback;
+}
+
 function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -198,8 +206,11 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
   }
 
   async function handleCompleteSimple(id: string, items: ItemQty[], diffs: Diff[]) {
-    const order = orders.find((o) => o.id === id);
-    if (!order) return;
+    const order = currentOrder && currentOrder.id === id ? currentOrder : orders.find((o) => o.id === id);
+    if (!order) {
+      showToast('Không tìm thấy đơn hàng — vui lòng đóng và mở lại đơn rồi thử lại');
+      return;
+    }
     const step = stepForOrder(order);
     if (!step) {
       showToast('Đơn đã hoàn tất, không có bước tiếp theo');
@@ -217,7 +228,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
       }
       refresh();
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Lỗi khi lưu vào cơ sở dữ liệu');
+      showToast(errorMessage(e, 'Lỗi khi lưu vào cơ sở dữ liệu'));
     } finally {
       setSaving(false);
     }
@@ -244,7 +255,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
       showToast(`Đã xác nhận nhặt kho · ${order.id} · ${order.customer}`);
       refresh();
     } catch (e) {
-      showToast(e instanceof Error ? e.message : `Không tìm thấy đơn ${docNo}`);
+      showToast(errorMessage(e, `Không tìm thấy đơn ${docNo}`));
     }
   }
 
