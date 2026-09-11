@@ -312,6 +312,8 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
             saving={saving}
             onClose={() => setOpenId(null)}
             onCompleteSimple={handleCompleteSimple}
+            toastMsg={toastMsg}
+            toastShow={toastShow}
           />
           <BarcodeScannerModal
             visible={scannerOpen}

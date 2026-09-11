@@ -6,6 +6,7 @@ import { colors, colorSets, radius } from '../theme';
 import { Badge, MiniBadge } from './Badge';
 import SlaBadge from './SlaBadge';
 import Timeline from './Timeline';
+import Toast from './Toast';
 import type { Order, OrderItem } from '../types/order';
 
 type Diff = { name: string; req: number; val: number };
@@ -16,6 +17,8 @@ interface Props {
   saving: boolean;
   onClose: () => void;
   onCompleteSimple: (id: string, items: ItemQty[], diffs: Diff[]) => void;
+  toastMsg: string;
+  toastShow: boolean;
 }
 
 function hasChaycua(o: Order) { return o.items.some((it) => it.type === 'chaycua'); }
@@ -29,7 +32,7 @@ function nextStepLabel(o: Order): string {
   return 'hoàn thành';
 }
 
-export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple }: Props) {
+export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple, toastMsg, toastShow }: Props) {
   const [qtys, setQtys] = useState<number[]>([]);
   // true = "Đủ" (khóa ô nhập, tự dùng SL yêu cầu) — false = "Thiếu" (mở ô nhập, kho tự gõ SL thực).
   const [sufficient, setSufficient] = useState<boolean[]>([]);
@@ -248,6 +251,8 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
           <Text style={[styles.btnGhostText, { textAlign: 'center', width: '100%' }]}>Đóng</Text>
         </Pressable>
       </View>
+
+      <Toast message={toastMsg} show={toastShow} />
     </Modal>
   );
 }
