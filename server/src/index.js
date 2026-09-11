@@ -120,38 +120,21 @@ function mapDocStatus(docStatus) {
   return 'congno';
 }
 
-// "Cần sửa đơn" cũng được suy ra thêm khi: đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng
-// nhặt được (QuantityWarehouse) vẫn ít hơn yêu cầu (QuantityRequest), đơn chưa đóng gói (DocStatus < 4).
-// Đây là tín hiệu bổ sung bên cạnh DocStatus=1 (Bravo/sale tự đặt) — ví dụ kho tự phát hiện thiếu hàng
-// khi DocStatus vẫn đang là 0 hoặc 2. Không tính dòng thuộc nhóm DỊCH VỤ (không có tồn kho).
-const SHORTAGE_EXISTS_SQL = `EXISTS (
-  SELECT 1 FROM B30AccDocSales sct
-  LEFT JOIN B20Item si ON si.Code = sct.ItemCode
-  WHERE sct.Stt = h.Stt
-    AND sct.Thoigiankho IS NOT NULL
-    AND sct.QuantityWarehouse IS NOT NULL
-    AND sct.QuantityWarehouse < sct.QuantityRequest
-    AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
-)`;
-
-function computeStatus(docStatus, hasShortage) {
-  const base = mapDocStatus(docStatus);
-  if (base === 'huy') return base; // đơn đã hủy, không xét thiếu hàng
-  if (hasShortage && docStatus < 4) return 'suachờ';
-  return base;
+// LƯU Ý QUAN TRỌNG: Thoigiankho luôn được Bravo tự set = CreatedAt ngay lúc tạo đơn (đã kiểm
+// chứng thực tế), KHÔNG phản ánh việc thủ kho đã thực sự nhặt hàng. Vì vậy KHÔNG dùng
+// "Thoigiankho IS NOT NULL" để suy luận thiếu hàng — trạng thái "Cần sửa đơn" (suachờ) chỉ dựa
+// vào đúng DocStatus=1 thật (do Bravo/sale đặt, hoặc do endpoint /step ở đây tự đặt khi thủ kho
+// nhặt thiếu — xem STEP_CONFIG bên dưới).
+function computeStatus(docStatus) {
+  return mapDocStatus(docStatus);
 }
 
-// Trả về mệnh đề WHERE lọc theo trạng thái app.
+// Trả về mệnh đề WHERE lọc theo trạng thái app (DocStatus là nguồn duy nhất, không suy luận thêm).
 function statusFilterClause(status) {
   if (!status) return '';
-  if (status === 'suachờ') {
-    return `AND h.DocStatus <> 9 AND (h.DocStatus = 1 OR (h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL}))`;
-  }
   const docStatusList = STATUS_TO_DOCSTATUS[status];
   if (!docStatusList) return 'AND 1=0';
-  const base = `AND h.DocStatus IN (${docStatusList.join(',')})`;
-  if (status === 'congno' || status === 'huy') return base;
-  return `${base} AND NOT (h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL})`;
+  return `AND h.DocStatus IN (${docStatusList.join(',')})`;
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -210,9 +193,8 @@ function rowsToOrders(rows) {
         docDate: row.DocDate,
         customer: row.CustomerName || row.CustomerCode,
         phone: row.CustomerTel || '',
-        status: null, // xác định sau khi duyệt hết các dòng (cần biết có thiếu hàng hay không)
+        status: computeStatus(row.DocStatus),
         docStatus: row.DocStatus,
-        _hasShortage: false,
         addr: row.CustomerAddress || '',
         time: fmtTime(row.CreatedAt),
         date: fmtDate(row.DocDate),
@@ -236,7 +218,7 @@ function rowsToOrders(rows) {
     // Ghi trước phần lọc dịch vụ bên dưới — nếu không, đơn chỉ toàn dòng dịch vụ (vd cước vận chuyển)
     // sẽ không bao giờ hiện được tiến trình dù DocStatus đã hoàn tất.
     const loggedStages = order._loggedStages || (order._loggedStages = new Set());
-    if (docStatus >= 2 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
+    if (docStatus >= 1 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
       loggedStages.add('xacnhan');
       order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
     }
@@ -254,11 +236,6 @@ function rowsToOrders(rows) {
     // không hiện trong danh sách sản phẩm và không tính vào việc phát hiện thiếu hàng.
     if (isService) continue;
 
-    // Thiếu hàng thật: đã nhặt kho (Thoigiankho có giá trị) nhưng số lượng nhặt được vẫn chưa đủ yêu cầu.
-    if (row.Thoigiankho && row.QuantityWarehouse != null && row.QuantityWarehouse < row.QuantityRequest) {
-      order._hasShortage = true;
-    }
-
     order.items.push({
       rowId: row.RowId,
       itemCode: row.ItemCode,
@@ -275,8 +252,6 @@ function rowsToOrders(rows) {
   }
   for (const order of ordersByDoc.values()) {
     delete order._loggedStages;
-    order.status = computeStatus(order.docStatus, order._hasShortage);
-    delete order._hasShortage;
     applySla(order);
   }
   return Array.from(ordersByDoc.values());
@@ -309,6 +284,7 @@ function applySla(order) {
 
 const STATUS_TO_DOCSTATUS = {
   tiepnhan: [0],
+  suachờ: [1],
   chuanbi: [2],
   donggoi: [3],
   congno: [4, 5, 6],
@@ -456,26 +432,22 @@ app.get('/api/orders/summary', async (req, res) => {
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
     const wClause = warehouseClause(request, warehouseCodes);
     const result = await request.query(`
-        SELECT DocStatus, HasShortage, COUNT(DISTINCT DocNo) AS cnt
-        FROM (
-          SELECT DISTINCT h.DocNo, h.DocStatus,
-            (CASE WHEN h.DocStatus < 4 AND ${SHORTAGE_EXISTS_SQL} THEN 1 ELSE 0 END) AS HasShortage
-          FROM B30AccDoc h
-          LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
-          WHERE h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
-            AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
-            AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
-            ${searchClause}
-            ${chayCuaClause}
-            ${shippingClause}
-            ${wClause}
-        ) t
-        GROUP BY DocStatus, HasShortage
+        SELECT h.DocStatus, COUNT(DISTINCT h.DocNo) AS cnt
+        FROM B30AccDoc h
+        LEFT JOIN B20Customer c ON c.Code = h.CustomerCode
+        WHERE h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
+          AND h.DocDate >= @dateFrom AND h.DocDate < DATEADD(day, 1, @dateTo)
+          AND EXISTS (SELECT 1 FROM B30AccDocSales ct WHERE ct.Stt = h.Stt)
+          ${searchClause}
+          ${chayCuaClause}
+          ${shippingClause}
+          ${wClause}
+        GROUP BY h.DocStatus
       `);
 
     const counts = { tiepnhan: 0, suachờ: 0, chuanbi: 0, donggoi: 0, congno: 0, huy: 0 };
     for (const row of result.recordset) {
-      counts[computeStatus(row.DocStatus, row.HasShortage === 1)] += row.cnt;
+      counts[computeStatus(row.DocStatus)] += row.cnt;
     }
     res.json({ counts });
   } catch (err) {
@@ -683,14 +655,14 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
     }
 
-    // Chặn chuyển sang "Đã đóng gói" nếu đơn đang ở trạng thái "Cần sửa đơn" (DocStatus=1, do
-    // Bravo/sale tự đặt) hoặc còn dòng thiếu hàng chưa xử lý (đúng nguyên tắc: chỉ đóng gói khi
-    // mọi dòng QuantityWarehouse >= QuantityRequest).
-    if (step === 'donggoi' && header.DocStatus === 1) {
-      await tx.rollback();
-      return res.status(400).json({ error: 'Đơn đang ở trạng thái "Cần sửa đơn" — chưa thể chuyển sang Đã đóng gói' });
-    }
+    // Chặn chuyển sang "Đã đóng gói" nếu đơn đang ở trạng thái "Cần sửa đơn" (DocStatus=1) hoặc
+    // còn dòng thực sự thiếu hàng (QuantityWarehouse < QuantityRequest) — đúng nguyên tắc chỉ
+    // đóng gói khi mọi dòng đã đủ.
     if (step === 'donggoi') {
+      if (header.DocStatus === 1) {
+        await tx.rollback();
+        return res.status(400).json({ error: 'Đơn đang ở trạng thái "Cần sửa đơn" — chưa thể chuyển sang Đã đóng gói' });
+      }
       const shortageResult = await new sql.Request(tx)
         .input('stt', sql.VarChar, header.Stt)
         .query(`
@@ -698,7 +670,6 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
           FROM B30AccDocSales sct
           LEFT JOIN B20Item si ON si.Code = sct.ItemCode
           WHERE sct.Stt = @stt
-            AND sct.Thoigiankho IS NOT NULL
             AND sct.QuantityWarehouse IS NOT NULL
             AND sct.QuantityWarehouse < sct.QuantityRequest
             AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
@@ -729,9 +700,27 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       `);
     }
 
+    // Bước "kho": tự quyết định đủ hay thiếu dựa trên số lượng thật vừa ghi — đủ thì DocStatus=2
+    // (Đã duyệt), thiếu thì DocStatus=1 (Cần sửa đơn) để Sale xử lý, thay vì luôn mặc định đủ.
+    let finalDocStatus = cfg.docStatus;
+    if (step === 'kho') {
+      const shortageResult = await new sql.Request(tx)
+        .input('stt', sql.VarChar, header.Stt)
+        .query(`
+          SELECT TOP 1 sct.ItemCode
+          FROM B30AccDocSales sct
+          LEFT JOIN B20Item si ON si.Code = sct.ItemCode
+          WHERE sct.Stt = @stt
+            AND sct.QuantityWarehouse IS NOT NULL
+            AND sct.QuantityWarehouse < sct.QuantityRequest
+            AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
+        `);
+      finalDocStatus = shortageResult.recordset.length > 0 ? 1 : 2;
+    }
+
     await new sql.Request(tx)
       .input('stt', sql.VarChar, header.Stt)
-      .input('docStatus', sql.TinyInt, cfg.docStatus)
+      .input('docStatus', sql.TinyInt, finalDocStatus)
       .query(`UPDATE B30AccDoc SET DocStatus = @docStatus WHERE Stt = @stt`);
 
     await new sql.Request(tx)
@@ -739,14 +728,14 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       .input('stt', sql.VarChar, header.Stt)
       .input('docDate', sql.Date, header.DocDate)
       .input('docCode', sql.VarChar, header.DocCode)
-      .input('docStatus', sql.TinyInt, cfg.docStatus)
+      .input('docStatus', sql.TinyInt, finalDocStatus)
       .query(`
         EXECUTE usp_B30AccDoc_Post
           @_BranchCode=@branchCode, @_Stt=@stt, @_DocDate=@docDate, @_DocCode=@docCode, @_DocStatus=@docStatus
       `);
 
     await tx.commit();
-    res.json({ ok: true, docNo, step, docStatus: cfg.docStatus });
+    res.json({ ok: true, docNo, step, docStatus: finalDocStatus });
   } catch (err) {
     console.error(err);
     try { await tx.rollback(); } catch (_) {}
