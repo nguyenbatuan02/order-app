@@ -158,6 +158,10 @@ function fmtDateTime(dt) {
 
 const SERVICE_CATG_CODES = ['DICHVU', 'HT-DICHVU'];
 
+// Sản phẩm "chạy cửa" = sản phẩm nằm ở kho "Kho hàng bán - Giao ngay" (mã 6000GN),
+// tức chưa có sẵn trong kho nội bộ, phải mua ngoài/nhập về mới đủ hàng.
+const CHAYCUA_WAREHOUSE_CODE = '6000GN';
+
 const ORDER_ROWS_SELECT = `
     h.Stt, h.DocNo, h.DocCode, h.BranchCode, h.DocDate, h.CreatedAt, h.DocStatus, h.CustomerCode,
     c.Name AS CustomerName, c.Tel AS CustomerTel, COALESCE(c.Address, h.Address2, '') AS CustomerAddress,
@@ -245,7 +249,7 @@ function rowsToOrders(rows) {
       sku: row.ItemCode,
       req: row.Quantity,
       shelf: row.LocationCode || '—',
-      type: row.ItemCode && row.ItemCode.endsWith('-CC') ? 'chaycua' : 'noibo',
+      type: row.ItemWarehouseCode === CHAYCUA_WAREHOUSE_CODE ? 'chaycua' : 'noibo',
       price: row.UnitPrice,
       done: docStatus >= 3 && !!row.Thoigiandonggoi,
     });
@@ -327,7 +331,7 @@ app.get('/api/orders/list', async (req, res) => {
     : '';
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
   const chayCuaClause = chayCuaOnly
-    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')`
+    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.WarehouseCode = '6000GN')`
     : '';
   const shippingClause = shipping === 'TH' || shipping === 'EX'
     ? `AND h.Goi_Vc = '${shipping}'`
@@ -417,7 +421,7 @@ app.get('/api/orders/summary', async (req, res) => {
   const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
   const chayCuaClause = chayCuaOnly
-    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')`
+    ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.WarehouseCode = '6000GN')`
     : '';
   const shippingClause = shipping === 'TH' || shipping === 'EX'
     ? `AND h.Goi_Vc = '${shipping}'`
@@ -467,7 +471,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
   const searchTerm = typeof q === 'string' ? q.trim() : '';
   const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
-  const chayCuaClause = chayCuaOnly ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.ItemCode LIKE '%-CC')` : '';
+  const chayCuaClause = chayCuaOnly ? `AND EXISTS (SELECT 1 FROM B30AccDocSales cc WHERE cc.Stt = h.Stt AND cc.WarehouseCode = '6000GN')` : '';
   const statusClause = statusFilterClause(status);
   const warehouseCodes = parseWarehouseCodes(warehouse);
 
@@ -513,7 +517,7 @@ app.get('/api/orders/warehouses', async (req, res) => {
   const searchTerm = typeof q === 'string' ? q.trim() : '';
   const searchClause = searchTerm ? `AND (h.DocNo COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Name COLLATE Vietnamese_CI_AI LIKE @q COLLATE Vietnamese_CI_AI OR c.Tel LIKE @q)` : '';
   const chayCuaOnly = req.query.chayCua === '1' || req.query.chayCua === 'true';
-  const chayCuaClause = chayCuaOnly ? `AND ct.ItemCode LIKE '%-CC'` : '';
+  const chayCuaClause = chayCuaOnly ? `AND ct.WarehouseCode = '6000GN'` : '';
   const statusClause = statusFilterClause(status);
   const shippingClause = shipping === 'TH' || shipping === 'EX'
     ? `AND h.Goi_Vc = '${shipping}'`
