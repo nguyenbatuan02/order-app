@@ -169,7 +169,7 @@ const ORDER_ROWS_SELECT = `
     ct.RowId, ct.ItemCode, ct.Description, ct.Quantity, ct.UnitPrice, ct.LocationCode,
     ct.QuantityRequest, ct.QuantityWarehouse,
     ct.WarehouseCode AS ItemWarehouseCode, wi.Name AS ItemWarehouseName,
-    i.ItemCatgCode,
+    i.ItemCatgCode, ii.Notes1 AS ItemShelfNotes,
     ct.Thoigiankho, ct.Nvkho, ct.Thoigiandonggoi, ct.Nvdonggoi, ct.Thoigianvanchuyen, ct.NvVanchuyen
   FROM B30AccDoc h
   JOIN B30AccDocSales ct ON ct.Stt = h.Stt
@@ -177,6 +177,7 @@ const ORDER_ROWS_SELECT = `
   LEFT JOIN B20Warehouse w ON w.Code = h.WarehouseCode
   LEFT JOIN B20Warehouse wi ON wi.Code = ct.WarehouseCode
   LEFT JOIN B20Item i ON i.Code = ct.ItemCode
+  LEFT JOIN B20ItemInfo ii ON ii.ItemCode = ct.ItemCode
 `;
 
 function shippingLabel(goiVc) {
@@ -248,7 +249,7 @@ function rowsToOrders(rows) {
       name: row.Description,
       sku: row.ItemCode,
       req: row.Quantity,
-      shelf: row.LocationCode || '—',
+      shelf: row.ItemShelfNotes || row.LocationCode || '—',
       type: row.ItemWarehouseCode === CHAYCUA_WAREHOUSE_CODE ? 'chaycua' : 'noibo',
       price: row.UnitPrice,
       done: docStatus >= 3 && !!row.Thoigiandonggoi,
