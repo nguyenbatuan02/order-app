@@ -39,11 +39,13 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   useEffect(() => {
     if (!order) return;
-    // Hàng chạy cửa mặc định tính là "Thiếu" (chưa đủ, cần mua ngoài) — kể cả khi trước đó đã
-    // cập nhật một phần trên Bravo, bộ phận nhặt đơn vẫn phải tự kiểm tra và tick lại từ đầu.
-    // Hàng nội bộ (có sẵn trong kho) mặc định "Đủ".
-    setSufficient(order.items.map((it) => it.type !== 'chaycua'));
-    setQtys(order.items.map((it) => (it.type === 'chaycua' ? 0 : it.req)));
+    // Ở bước nhặt kho, hàng chạy cửa mặc định tính là "Thiếu" (chưa đủ, cần mua ngoài) — kể cả
+    // khi trước đó đã cập nhật một phần trên Bravo, bộ phận nhặt đơn vẫn phải tự kiểm tra lại từ
+    // đầu. Từ bước đóng gói/vận chuyển trở đi, hàng chạy cửa mặc định "Đủ" như hàng nội bộ.
+    const isPicking = order.status === 'suachờ' || order.docStatus <= 1;
+    const isChaycuaLocked = (it: OrderItem) => it.type === 'chaycua' && isPicking;
+    setSufficient(order.items.map((it) => !isChaycuaLocked(it)));
+    setQtys(order.items.map((it) => (isChaycuaLocked(it) ? 0 : it.req)));
   }, [order?.id]);
 
   const activeDiffs: Diff[] = useMemo(() => {
@@ -62,6 +64,10 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   const c = colorSets[s.color];
   const mix = hasChaycua(order) && hasNoibo(order);
   const canComplete = order.status !== 'congno' && order.status !== 'huy';
+  // Khoá tick chạy cửa chỉ áp dụng ở bước nhặt kho — từ bước đóng gói/vận chuyển trở đi, hàng
+  // chạy cửa coi như đã về đủ (nếu chưa đủ thì đơn không thể qua khỏi bước nhặt kho), nên bộ
+  // phận đóng gói/vận chuyển vẫn cần tick bình thường như hàng nội bộ.
+  const isPickingStep = order.status === 'suachờ' || order.docStatus <= 1;
 
   function toggleSufficient(i: number) {
     setSufficient((prev) => {
@@ -85,15 +91,17 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   const renderItem = (it: OrderItem, idx: number) => {
     const isChaycua = it.type === 'chaycua';
-    // Hàng chạy cửa luôn tính là "Thiếu" và khoá tick — bộ phận nhặt đơn không xử lý/xác nhận đủ
-    // hàng chạy cửa qua app này, việc đó diễn ra bên Bravo (mua ngoài + nhập kho) như quy trình thật.
-    const isSufficient = isChaycua ? false : sufficient[idx];
+    // Khoá tick chỉ áp dụng cho hàng chạy cửa ở đúng bước nhặt kho — bộ phận nhặt đơn không xử
+    // lý/xác nhận đủ hàng chạy cửa qua app này (việc đó diễn ra bên Bravo: mua ngoài + nhập kho).
+    // Từ bước đóng gói/vận chuyển trở đi, hàng chạy cửa tick bình thường như hàng nội bộ.
+    const isLocked = isChaycua && isPickingStep;
+    const isSufficient = isLocked ? false : sufficient[idx];
     return (
       <View style={[styles.itemLine, isChaycua ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
         <Pressable
           style={styles.checkCol}
-          onPress={() => !isChaycua && toggleSufficient(idx)}
-          disabled={isChaycua}
+          onPress={() => !isLocked && toggleSufficient(idx)}
+          disabled={isLocked}
         >
           <Ionicons
             name={isSufficient ? 'checkbox' : 'square-outline'}
@@ -101,7 +109,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             color={isSufficient ? colors.green : colors.amber}
           />
           <Text style={[styles.checkLabel, { color: isSufficient ? colors.greenText : colors.amberText }]}>
-            {isChaycua ? 'Chạy cửa' : isSufficient ? 'Đủ' : 'Thiếu'}
+            {isLocked ? 'Chạy cửa' : isSufficient ? 'Đủ' : 'Thiếu'}
           </Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -122,7 +130,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
               isSufficient && styles.qtyInputDisabled,
             ]}
             keyboardType="number-pad"
-            editable={!isChaycua && !isSufficient}
+            editable={!isLocked && !isSufficient}
             value={String(qtys[idx] ?? it.req)}
             onChangeText={(t) => qtyChange(idx, parseInt(t) || 0)}
           />
