@@ -139,16 +139,22 @@ function statusFilterClause(status) {
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
+// Luôn quy đổi theo giờ Việt Nam (UTC+7) thay vì dùng getHours()/getDate() — chúng lấy theo múi
+// giờ hệ điều hành của server, mà container chạy VPS mặc định là UTC nên sẽ lệch 7 tiếng.
+function toVN(dt) {
+  return new Date(new Date(dt).getTime() + 7 * 60 * 60 * 1000);
+}
+
 function fmtTime(dt) {
   if (!dt) return '';
-  const d = new Date(dt);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const d = toVN(dt);
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
 
 function fmtDate(dt) {
   if (!dt) return '';
-  const d = new Date(dt);
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
+  const d = toVN(dt);
+  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}`;
 }
 
 function fmtDateTime(dt) {
