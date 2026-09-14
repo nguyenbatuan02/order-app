@@ -42,7 +42,7 @@ export default function Timeline({ order }: { order: Order }) {
                     </View>
                     <Text style={styles.metaText}>{logEntry.person}</Text>
                   </View>
-                  <Text style={styles.metaText}>{logEntry.time || 'Không rõ giờ (cập nhật ngoài app)'}</Text>
+                  <Text style={styles.metaText}>{logEntry.time}</Text>
                   {logEntry.note && <Text style={styles.note}>· {logEntry.note}</Text>}
                 </View>
               ) : (

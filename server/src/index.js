@@ -228,31 +228,18 @@ function rowsToOrders(rows) {
     // Chỉ ghi 1 lần mỗi bước cho cả đơn (không lặp lại theo từng dòng sản phẩm).
     // Ghi trước phần lọc dịch vụ bên dưới — nếu không, đơn chỉ toàn dòng dịch vụ (vd cước vận chuyển)
     // sẽ không bao giờ hiện được tiến trình dù DocStatus đã hoàn tất.
-    // Một số đơn được đẩy DocStatus thẳng trên Bravo desktop (không qua từng bước của app) —
-    // khi đó Bravo tự set timestamp bước đó = CreatedAt (hoặc = timestamp bước trước), khiến
-    // tiến trình hiện ra phi logic (VD: đóng gói lúc 13:03 trong khi nhặt kho lúc 20:17). Phát
-    // hiện bằng cách so sánh với thời điểm bước liền trước: nếu không muộn hơn, coi là thời gian
-    // "ảo" và không hiện giờ cụ thể, chỉ ghi nhận đã hoàn thành.
     const loggedStages = order._loggedStages || (order._loggedStages = new Set());
-    if (order._lastStageAt === undefined) order._lastStageAt = new Date(row.CreatedAt).getTime();
-
-    function pushStage(stage, person, rawTime) {
-      loggedStages.add(stage);
-      const t = new Date(rawTime).getTime();
-      const isReliable = t > order._lastStageAt;
-      order.log.push({ stage, person: person || '', time: isReliable ? fmtDateTime(rawTime) : '' });
-      if (isReliable) order._lastStageAt = t;
-      return t;
-    }
-
     if (docStatus >= 1 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
-      pushStage('xacnhan', row.Nvkho, row.Thoigiankho);
+      loggedStages.add('xacnhan');
+      order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
     }
     if (docStatus >= 3 && row.Thoigiandonggoi && !loggedStages.has('donggoi')) {
-      pushStage('donggoi', row.Nvdonggoi, row.Thoigiandonggoi);
+      loggedStages.add('donggoi');
+      order.log.push({ stage: 'donggoi', person: row.Nvdonggoi || '', time: fmtDateTime(row.Thoigiandonggoi) });
     }
     if (docStatus >= 4 && row.Thoigianvanchuyen && !loggedStages.has('dieuvan')) {
-      pushStage('dieuvan', row.NvVanchuyen, row.Thoigianvanchuyen);
+      loggedStages.add('dieuvan');
+      order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
       order._deliveredAtRaw = row.Thoigianvanchuyen;
     }
 
