@@ -84,17 +84,24 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   }
 
   const renderItem = (it: OrderItem, idx: number) => {
-    const isSufficient = sufficient[idx];
+    const isChaycua = it.type === 'chaycua';
+    // Hàng chạy cửa luôn tính là "Thiếu" và khoá tick — bộ phận nhặt đơn không xử lý/xác nhận đủ
+    // hàng chạy cửa qua app này, việc đó diễn ra bên Bravo (mua ngoài + nhập kho) như quy trình thật.
+    const isSufficient = isChaycua ? false : sufficient[idx];
     return (
-      <View style={[styles.itemLine, it.type === 'chaycua' ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
-        <Pressable style={styles.checkCol} onPress={() => toggleSufficient(idx)}>
+      <View style={[styles.itemLine, isChaycua ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
+        <Pressable
+          style={styles.checkCol}
+          onPress={() => !isChaycua && toggleSufficient(idx)}
+          disabled={isChaycua}
+        >
           <Ionicons
             name={isSufficient ? 'checkbox' : 'square-outline'}
             size={22}
             color={isSufficient ? colors.green : colors.amber}
           />
           <Text style={[styles.checkLabel, { color: isSufficient ? colors.greenText : colors.amberText }]}>
-            {isSufficient ? 'Đủ' : 'Thiếu'}
+            {isChaycua ? 'Chạy cửa' : isSufficient ? 'Đủ' : 'Thiếu'}
           </Text>
         </Pressable>
         <View style={{ flex: 1 }}>
@@ -115,7 +122,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
               isSufficient && styles.qtyInputDisabled,
             ]}
             keyboardType="number-pad"
-            editable={!isSufficient}
+            editable={!isChaycua && !isSufficient}
             value={String(qtys[idx] ?? it.req)}
             onChangeText={(t) => qtyChange(idx, parseInt(t) || 0)}
           />
@@ -247,13 +254,17 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
         <Timeline order={order} />
 
         <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Chi tiết sản phẩm</Text>
-        {mix ? (
+        {chaycua.length > 0 ? (
           <>
-            <View style={styles.groupHead}>
-              <MiniBadge bg={colors.tealBg} text={colors.tealText} label="Nội bộ" />
-              <Text style={styles.groupHeadText}>Hàng có sẵn trong kho</Text>
-            </View>
-            {noibo.map((x) => renderItem(x.it, x.i))}
+            {noibo.length > 0 && (
+              <>
+                <View style={styles.groupHead}>
+                  <MiniBadge bg={colors.tealBg} text={colors.tealText} label="Nội bộ" />
+                  <Text style={styles.groupHeadText}>Hàng có sẵn trong kho</Text>
+                </View>
+                {noibo.map((x) => renderItem(x.it, x.i))}
+              </>
+            )}
             <View style={styles.groupHead}>
               <MiniBadge bg={colors.amberBg} text={colors.amberText} label="Chạy cửa" />
               <Text style={styles.groupHeadText}>Hàng mua ngoài · về sau</Text>
