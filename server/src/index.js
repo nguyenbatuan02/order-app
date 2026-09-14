@@ -268,6 +268,7 @@ function rowsToOrders(rows) {
   }
   for (const order of ordersByDoc.values()) {
     delete order._loggedStages;
+    order.items.sort((a, b) => a.warehouseName.localeCompare(b.warehouseName, 'vi'));
     applySla(order);
   }
   return Array.from(ordersByDoc.values());
