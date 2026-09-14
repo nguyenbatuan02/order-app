@@ -39,8 +39,11 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   useEffect(() => {
     if (!order) return;
-    setQtys(order.items.map((it) => it.req));
-    setSufficient(order.items.map(() => true));
+    // Hàng chạy cửa mặc định tính là "Thiếu" (chưa đủ, cần mua ngoài) — kể cả khi trước đó đã
+    // cập nhật một phần trên Bravo, bộ phận nhặt đơn vẫn phải tự kiểm tra và tick lại từ đầu.
+    // Hàng nội bộ (có sẵn trong kho) mặc định "Đủ".
+    setSufficient(order.items.map((it) => it.type !== 'chaycua'));
+    setQtys(order.items.map((it) => (it.type === 'chaycua' ? 0 : it.req)));
   }, [order?.id]);
 
   const activeDiffs: Diff[] = useMemo(() => {
