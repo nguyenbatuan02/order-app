@@ -33,7 +33,13 @@
           }
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép truy cập camera để quét mã vạch/QR trên phiếu đơn hàng"
+        }
+      ]
     ],
     "extra": {
       "eas": {
