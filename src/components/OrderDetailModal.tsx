@@ -98,42 +98,44 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
     const isSufficient = isLocked ? false : sufficient[idx];
     return (
       <View style={[styles.itemLine, isChaycua ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
-        <Pressable
-          style={styles.checkCol}
-          onPress={() => !isLocked && toggleSufficient(idx)}
-          disabled={isLocked}
-        >
-          <Ionicons
-            name={isSufficient ? 'checkbox' : 'square-outline'}
-            size={22}
-            color={isSufficient ? colors.green : colors.amber}
-          />
-          <Text style={[styles.checkLabel, { color: isSufficient ? colors.greenText : colors.amberText }]}>
-            {isLocked ? 'Chạy cửa' : isSufficient ? 'Đủ' : 'Thiếu'}
-          </Text>
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.shelfText} numberOfLines={1}>Kệ: {it.shelf}</Text>
-          <Text style={styles.itemName}>{it.name} ({it.sku})</Text>
-          {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
-        </View>
-        <View style={styles.qtyCol}>
-          <Text style={styles.qtyLabel}>SL yêu cầu</Text>
-          <Text style={styles.qtyValue}>{it.req}</Text>
-        </View>
-        <View style={styles.qtyCol}>
-          <Text style={styles.qtyLabel}>SL thực</Text>
-          <TextInput
-            style={[
-              styles.qtyInput,
-              !isSufficient && styles.qtyInputChanged,
-              isSufficient && styles.qtyInputDisabled,
-            ]}
-            keyboardType="number-pad"
-            editable={!isLocked && !isSufficient}
-            value={String(qtys[idx] ?? it.req)}
-            onChangeText={(t) => qtyChange(idx, parseInt(t) || 0)}
-          />
+        <Text style={styles.shelfText}>Kệ: {it.shelf}</Text>
+        <View style={styles.itemBottomRow}>
+          <Pressable
+            style={styles.checkCol}
+            onPress={() => !isLocked && toggleSufficient(idx)}
+            disabled={isLocked}
+          >
+            <Ionicons
+              name={isSufficient ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={isSufficient ? colors.green : colors.amber}
+            />
+            <Text style={[styles.checkLabel, { color: isSufficient ? colors.greenText : colors.amberText }]}>
+              {isLocked ? 'Chạy cửa' : isSufficient ? 'Đủ' : 'Thiếu'}
+            </Text>
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemName}>{it.name} ({it.sku})</Text>
+            {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
+          </View>
+          <View style={styles.qtyCol}>
+            <Text style={styles.qtyLabel}>SL yêu cầu</Text>
+            <Text style={styles.qtyValue}>{it.req}</Text>
+          </View>
+          <View style={styles.qtyCol}>
+            <Text style={styles.qtyLabel}>SL thực</Text>
+            <TextInput
+              style={[
+                styles.qtyInput,
+                !isSufficient && styles.qtyInputChanged,
+                isSufficient && styles.qtyInputDisabled,
+              ]}
+              keyboardType="number-pad"
+              editable={!isLocked && !isSufficient}
+              value={String(qtys[idx] ?? it.req)}
+              onChangeText={(t) => qtyChange(idx, parseInt(t) || 0)}
+            />
+          </View>
         </View>
       </View>
     );
@@ -311,10 +313,11 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 13, fontWeight: '700', color: colors.text2, marginBottom: 10 },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 10 },
   groupHeadText: { fontSize: 13, fontWeight: '700', color: colors.text },
-  itemLine: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, marginBottom: 8, backgroundColor: colors.surface2, borderLeftWidth: 3 },
+  itemLine: { padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, marginBottom: 8, backgroundColor: colors.surface2, borderLeftWidth: 3 },
+  itemBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   itemLineTeal: { borderLeftColor: colors.teal },
   itemLineAmber: { borderLeftColor: colors.amber },
-  itemName: { fontSize: 13.5, fontWeight: '600', color: colors.text, marginTop: 3 },
+  itemName: { fontSize: 13.5, fontWeight: '600', color: colors.text },
   itemSub: { fontSize: 12, color: colors.text3, marginTop: 1 },
   shelfText: { fontSize: 16, fontWeight: '800', color: colors.text },
   qtyCol: { alignItems: 'center', width: 68 },
