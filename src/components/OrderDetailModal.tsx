@@ -113,7 +113,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
           </Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.shelfText}>Kệ: {it.shelf}</Text>
+          <Text style={styles.shelfText} numberOfLines={1}>Kệ: {it.shelf}</Text>
           <Text style={styles.itemName}>{it.name} ({it.sku})</Text>
           {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
         </View>
