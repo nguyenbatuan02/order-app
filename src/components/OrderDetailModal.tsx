@@ -113,9 +113,8 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
           </Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.itemName}>{it.name}</Text>
-          <Text style={styles.itemSub}>{it.sku}</Text>
           <Text style={styles.shelfText}>Kệ: {it.shelf}</Text>
+          <Text style={styles.itemName}>{it.name} ({it.sku})</Text>
           {!!it.warehouseName && <Text style={styles.itemSub}>Kho: {it.warehouseName}</Text>}
         </View>
         <View style={styles.qtyCol}>
@@ -315,9 +314,9 @@ const styles = StyleSheet.create({
   itemLine: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 9, marginBottom: 8, backgroundColor: colors.surface2, borderLeftWidth: 3 },
   itemLineTeal: { borderLeftColor: colors.teal },
   itemLineAmber: { borderLeftColor: colors.amber },
-  itemName: { fontSize: 13.5, fontWeight: '600', color: colors.text },
+  itemName: { fontSize: 13.5, fontWeight: '600', color: colors.text, marginTop: 3 },
   itemSub: { fontSize: 12, color: colors.text3, marginTop: 1 },
-  shelfText: { fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 3 },
+  shelfText: { fontSize: 16, fontWeight: '800', color: colors.text },
   qtyCol: { alignItems: 'center', width: 68 },
   qtyLabel: { fontSize: 10.5, color: colors.text3 },
   qtyValue: { fontSize: 15, fontWeight: '700', color: colors.text, marginTop: 2 },
