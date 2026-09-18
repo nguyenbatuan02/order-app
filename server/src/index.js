@@ -223,25 +223,22 @@ function rowsToOrders(rows) {
     const docStatus = row.DocStatus;
     const isService = SERVICE_CATG_CODES.includes(row.ItemCatgCode);
 
-    // Chỉ hiện các bước tiến trình khớp với DocStatus thực tế — DB có thể chứa timestamp
-    // "ảo" vượt quá trạng thái hiện tại (dữ liệu import/test cũ), không phản ánh đúng đã xảy ra.
-    // Chỉ ghi 1 lần mỗi bước cho cả đơn (không lặp lại theo từng dòng sản phẩm).
-    // Ghi trước phần lọc dịch vụ bên dưới — nếu không, đơn chỉ toàn dòng dịch vụ (vd cước vận chuyển)
-    // sẽ không bao giờ hiện được tiến trình dù DocStatus đã hoàn tất.
-    const loggedStages = order._loggedStages || (order._loggedStages = new Set());
-    if (docStatus >= 1 && row.Thoigiankho && !loggedStages.has('xacnhan')) {
-      loggedStages.add('xacnhan');
-      order.log.push({ stage: 'xacnhan', person: row.Nvkho || '', time: fmtDateTime(row.Thoigiankho) });
+    // Mỗi đơn có nhiều dòng sản phẩm, và không phải dòng nào cũng được xác nhận qua app cùng lúc
+    // (VD: sản phẩm thêm sau khi đơn đã đóng gói xong sẽ có Thoigiankho/Nvkho "ảo" = CreatedAt,
+    // rỗng người). Gom ứng viên theo từng bước rồi ưu tiên dòng có tên người xác nhận (dữ liệu
+    // thật) hơn dòng rỗng người (dữ liệu ảo) — không chốt cứng theo dòng gặp đầu tiên.
+    const candidates = order._stageCandidates || (order._stageCandidates = {});
+    function considerStage(stage, minDocStatus, rawTime, person) {
+      if (docStatus < minDocStatus || !rawTime) return;
+      const existing = candidates[stage];
+      const hasPerson = !!person;
+      if (!existing || (hasPerson && !existing.hasPerson)) {
+        candidates[stage] = { rawTime, person: person || '', hasPerson };
+      }
     }
-    if (docStatus >= 3 && row.Thoigiandonggoi && !loggedStages.has('donggoi')) {
-      loggedStages.add('donggoi');
-      order.log.push({ stage: 'donggoi', person: row.Nvdonggoi || '', time: fmtDateTime(row.Thoigiandonggoi) });
-    }
-    if (docStatus >= 4 && row.Thoigianvanchuyen && !loggedStages.has('dieuvan')) {
-      loggedStages.add('dieuvan');
-      order.log.push({ stage: 'dieuvan', person: row.NvVanchuyen || '', time: fmtDateTime(row.Thoigianvanchuyen) });
-      order._deliveredAtRaw = row.Thoigianvanchuyen;
-    }
+    considerStage('xacnhan', 1, row.Thoigiankho, row.Nvkho);
+    considerStage('donggoi', 3, row.Thoigiandonggoi, row.Nvdonggoi);
+    considerStage('dieuvan', 4, row.Thoigianvanchuyen, row.NvVanchuyen);
 
     // Bỏ các dòng thuộc nhóm DỊCH VỤ (cước vận chuyển...) — không có tồn kho, không cần nhặt/đóng gói,
     // không hiện trong danh sách sản phẩm và không tính vào việc phát hiện thiếu hàng.
@@ -267,7 +264,14 @@ function rowsToOrders(rows) {
     });
   }
   for (const order of ordersByDoc.values()) {
-    delete order._loggedStages;
+    const candidates = order._stageCandidates || {};
+    delete order._stageCandidates;
+    for (const stage of ['xacnhan', 'donggoi', 'dieuvan']) {
+      const c = candidates[stage];
+      if (!c) continue;
+      order.log.push({ stage, person: c.person, time: fmtDateTime(c.rawTime) });
+      if (stage === 'dieuvan') order._deliveredAtRaw = c.rawTime;
+    }
     order.items.sort((a, b) => a.warehouseName.localeCompare(b.warehouseName, 'vi'));
     applySla(order);
   }
