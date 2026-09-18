@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 
 const RAW_USERS = [
-  { ma: 'LUANTRAN', mat_khau: '123456', ten: 'Quản trị', quyen: 'admin' },
+  { ma: 'LUANTRAN', mat_khau: '123456', ten: 'LUANTRAN', quyen: 'admin' },
   { ma: 'HANGNGUYEN', mat_khau: '123456', ten: 'Nguyễn Thúy Hằng', quyen: 'user' },
   { ma: 'HUYDANG', mat_khau: '123456', ten: 'Đặng Quốc Huy', quyen: 'user' },
   { ma: 'HUYENNGUYEN', mat_khau: '123456', ten: 'Nguyễn Ngọc Huyền', quyen: 'user' },
