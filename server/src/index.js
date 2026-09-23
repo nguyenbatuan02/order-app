@@ -754,6 +754,11 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       .query(`UPDATE B30AccDoc SET DocStatus = @docStatus WHERE Stt = @stt`);
 
     await new sql.Request(tx)
+      .input('stt', sql.VarChar, header.Stt)
+      .input('docNo', sql.NVarChar, docNo)
+      .query(`UPDATE B30AccDocAtchDoc SET AtchDocNo = @docNo WHERE Stt = @stt`);
+
+    await new sql.Request(tx)
       .input('branchCode', sql.VarChar, header.BranchCode)
       .input('stt', sql.VarChar, header.Stt)
       .input('docDate', sql.Date, header.DocDate)
