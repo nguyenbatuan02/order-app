@@ -11,6 +11,7 @@ const RAW_USERS = [
   { ma: 'THANHPHAM', mat_khau: '123456', ten: 'Phạm Minh Thành', quyen: 'user' },
   { ma: 'THUYNGUYEN', mat_khau: '123456', ten: 'Nguyễn Minh Thúy', quyen: 'user' },
   { ma: 'phuongnguyen', mat_khau: '123456', ten: 'Phương Nguyễn', quyen: 'user' },
+  { ma: 'APPKHO', mat_khau: 'Htauto@123', ten: 'APPKHO', quyen: 'admin' },
 ];
 
 const USERS = RAW_USERS.map((u) => ({
