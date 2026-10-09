@@ -12,15 +12,15 @@ const RAW_USERS = [
   { ma: 'THUYNGUYEN', mat_khau: '123456', ten: 'Nguyễn Minh Thúy', quyen: 'user' },
   { ma: 'phuongnguyen', mat_khau: '123456', ten: 'Phương Nguyễn', quyen: 'user' },
   { ma: 'ANHHOANG', mat_khau: '123456', ten: 'Hoàng Thị Thuỳ Anh', quyen: 'user' },
-  { ma: 'CHINHTRAN', mat_khau: '123456', ten: 'Trần Thị Tuyết Chính', quyen: 'user' },
-  { ma: 'HOADANG', mat_khau: '123456', ten: 'Đặng Quỳnh Hoa', quyen: 'user' },
+  { ma: 'CHINHTRAN', mat_khau: '123456', ten: 'Trần Thị Tuyết Chính', quyen: 'user', warehouseScope: 'Chương Dương' },
+  { ma: 'HOADANG', mat_khau: '123456', ten: 'Đặng Quỳnh Hoa', quyen: 'user', warehouseScope: 'Chương Dương' },
   { ma: 'HUUNGUYEN', mat_khau: '123456', ten: 'Nguyễn Văn Hữu', quyen: 'user' },
-  { ma: 'ANTHINH', mat_khau: '123456', ten: 'An Thịnh', quyen: 'user' },
-  { ma: 'TUNGLE', mat_khau: '123456', ten: 'Lê Tùng', quyen: 'user' },
+  { ma: 'ANTHINH', mat_khau: '123456', ten: 'An Thịnh', quyen: 'user', warehouseScope: 'Chương Dương' },
+  { ma: 'TUNGLE', mat_khau: '123456', ten: 'Lê Tùng', quyen: 'user', warehouseScope: 'Chương Dương' },
   // warehouseScope: chuỗi khớp theo kiểu SQL LIKE với tên kho (B20Warehouse.Name) — tài khoản
   // này chỉ thấy đơn có ít nhất 1 dòng sản phẩm thuộc kho có tên chứa chuỗi này. Để trống/bỏ
   // field này nếu tài khoản được xem tất cả các kho.
-  { ma: 'KHOCDD', mat_khau: '123456', ten: 'Kho Chương Dương Độ', quyen: 'user', warehouseScope: 'Chương Dương' },
+  { ma: 'KHOCDD', mat_khau: '123456', ten: 'Kho Chương Dương Độ', quyen: 'user' },
 ];
 
 const USERS = RAW_USERS.map((u) => ({
