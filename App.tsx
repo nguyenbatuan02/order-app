@@ -201,7 +201,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     if (order.status === 'suachờ') return 'kho';
     if (order.docStatus <= 1) return 'kho';
     if (order.docStatus === 2) return 'donggoi';
-    if (order.docStatus === 3) return 'vanchuyen';
+    // Dừng ở đóng gói — kho không xử lý bước vận chuyển qua app (bên khác phụ trách).
     return null;
   }
 

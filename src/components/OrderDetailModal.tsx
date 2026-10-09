@@ -63,7 +63,8 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   const s = STATUSES.find((x) => x.id === order.status)!;
   const c = colorSets[s.color];
   const mix = hasChaycua(order) && hasNoibo(order);
-  const canComplete = order.status !== 'congno' && order.status !== 'huy';
+  // Dừng ở đóng gói — kho không xử lý bước vận chuyển qua app (bên khác phụ trách).
+  const canComplete = order.status !== 'congno' && order.status !== 'huy' && order.docStatus < 3;
   // Khoá tick chạy cửa chỉ áp dụng ở bước nhặt kho — từ bước đóng gói/vận chuyển trở đi, hàng
   // chạy cửa coi như đã về đủ (nếu chưa đủ thì đơn không thể qua khỏi bước nhặt kho), nên bộ
   // phận đóng gói/vận chuyển vẫn cần tick bình thường như hàng nội bộ.
@@ -217,6 +218,15 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
         <View style={[styles.callout, styles.calloutWarn]}>
           <Ionicons name="close-circle-outline" size={17} color={colors.amberText} />
           <Text style={[styles.calloutText, { color: colors.amberText }]}>Đơn đã bị hủy, không cần xử lý thêm.</Text>
+        </View>
+      </View>
+    );
+  } else if (order.docStatus === 3) {
+    completeBlock = (
+      <View style={styles.completeSection}>
+        <View style={[styles.callout, styles.calloutTeal]}>
+          <Ionicons name="checkmark-circle-outline" size={17} color={colors.tealText} />
+          <Text style={[styles.calloutText, { color: colors.tealText }]}>Đơn đã đóng gói xong, chờ bộ phận vận chuyển xử lý tiếp (không qua app).</Text>
         </View>
       </View>
     );
