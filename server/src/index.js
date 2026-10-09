@@ -327,8 +327,21 @@ function warehouseClause(request, codes, alias = 'wct') {
   return `AND EXISTS (SELECT 1 FROM B30AccDocSales ${alias} WHERE ${alias}.Stt = h.Stt AND ${alias}.WarehouseCode IN (${names.join(',')}))`;
 }
 
+// Giới hạn theo tài khoản: nếu user.warehouseScope có giá trị (VD "Chương Dương"), chỉ cho thấy
+// đơn có ít nhất 1 dòng sản phẩm thuộc kho có tên chứa chuỗi đó — enforce ở server (không chỉ lọc
+// UI) vì các endpoint đọc đơn đều yêu cầu đăng nhập (requireAuth) từ nay.
+function warehouseScopeClause(request, user, alias = 'wsc') {
+  if (!user || !user.warehouseScope) return '';
+  request.input('whScope', sql.NVarChar, `%${user.warehouseScope}%`);
+  return `AND EXISTS (
+    SELECT 1 FROM B30AccDocSales ${alias}
+    LEFT JOIN B20Warehouse ${alias}w ON ${alias}w.Code = ${alias}.WarehouseCode
+    WHERE ${alias}.Stt = h.Stt AND ${alias}w.Name COLLATE Vietnamese_CI_AI LIKE @whScope COLLATE Vietnamese_CI_AI
+  )`;
+}
+
 // GET /api/orders/list?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&pageSize=20&status=&q= -> danh sách đơn hàng đầy đủ (dạng Order), có phân trang + lọc + tìm kiếm
-app.get('/api/orders/list', async (req, res) => {
+app.get('/api/orders/list', requireAuth, async (req, res) => {
   const { from, to, status, q, shipping, warehouse } = req.query;
   const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
@@ -363,6 +376,7 @@ app.get('/api/orders/list', async (req, res) => {
     const countReq = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) countReq.input('q', sql.NVarChar, `%${searchTerm}%`);
     const countWarehouseClause = warehouseClause(countReq, warehouseCodes);
+    const countScopeClause = warehouseScopeClause(countReq, req.user);
     const countResult = await countReq.query(`
         SELECT COUNT(DISTINCT h.DocNo) AS total
         FROM B30AccDoc h
@@ -375,6 +389,7 @@ app.get('/api/orders/list', async (req, res) => {
           ${chayCuaClause}
           ${shippingClause}
           ${countWarehouseClause}
+          ${countScopeClause}
       `);
     const total = countResult.recordset[0].total;
 
@@ -385,6 +400,7 @@ app.get('/api/orders/list', async (req, res) => {
       .input('pageSize', sql.Int, pageSize);
     if (searchTerm) docNoReq.input('q', sql.NVarChar, `%${searchTerm}%`);
     const docNoWarehouseClause = warehouseClause(docNoReq, warehouseCodes);
+    const docNoScopeClause = warehouseScopeClause(docNoReq, req.user);
     const docNoResult = await docNoReq.query(`
         SELECT DISTINCT h.DocNo, MAX(h.CreatedAt) AS LastCreatedAt
         FROM B30AccDoc h
@@ -397,6 +413,7 @@ app.get('/api/orders/list', async (req, res) => {
           ${searchClause}
           ${shippingClause}
           ${docNoWarehouseClause}
+          ${docNoScopeClause}
         GROUP BY h.DocNo
         ORDER BY MAX(h.CreatedAt) DESC, h.DocNo DESC
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
@@ -426,7 +443,7 @@ app.get('/api/orders/list', async (req, res) => {
 });
 
 // GET /api/orders/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&q= -> số lượng đơn theo trạng thái, không phân trang
-app.get('/api/orders/summary', async (req, res) => {
+app.get('/api/orders/summary', requireAuth, async (req, res) => {
   const { from, to, q, shipping, warehouse } = req.query;
   const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
@@ -452,6 +469,7 @@ app.get('/api/orders/summary', async (req, res) => {
     const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
     const wClause = warehouseClause(request, warehouseCodes);
+    const scopeClause = warehouseScopeClause(request, req.user);
     const result = await request.query(`
         SELECT h.DocStatus, COUNT(DISTINCT h.DocNo) AS cnt
         FROM B30AccDoc h
@@ -463,6 +481,7 @@ app.get('/api/orders/summary', async (req, res) => {
           ${chayCuaClause}
           ${shippingClause}
           ${wClause}
+          ${scopeClause}
         GROUP BY h.DocStatus
       `);
 
@@ -478,7 +497,7 @@ app.get('/api/orders/summary', async (req, res) => {
 });
 
 // GET /api/orders/shipping-summary?from&to&q&status&chayCua&warehouse -> số đơn theo gói vận chuyển (TH/EX/PICKUP)
-app.get('/api/orders/shipping-summary', async (req, res) => {
+app.get('/api/orders/shipping-summary', requireAuth, async (req, res) => {
   const { from, to, q, status, warehouse } = req.query;
   const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
   if (!isValidDate(from)) {
@@ -497,6 +516,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
     const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
     const wClause = warehouseClause(request, warehouseCodes);
+    const scopeClause = warehouseScopeClause(request, req.user);
     const result = await request.query(`
         SELECT h.Goi_Vc, COUNT(DISTINCT h.DocNo) AS cnt
         FROM B30AccDoc h
@@ -508,6 +528,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
           ${chayCuaClause}
           ${statusClause}
           ${wClause}
+          ${scopeClause}
         GROUP BY h.Goi_Vc
       `);
     const counts = { TH: 0, EX: 0, PICKUP: 0 };
@@ -524,7 +545,7 @@ app.get('/api/orders/shipping-summary', async (req, res) => {
 });
 
 // GET /api/orders/warehouses?from&to&q&status&chayCua&shipping -> danh sách kho đang có đơn (kèm số lượng), sắp xếp giảm dần
-app.get('/api/orders/warehouses', async (req, res) => {
+app.get('/api/orders/warehouses', requireAuth, async (req, res) => {
   const { from, to, q, status, shipping } = req.query;
   const isValidDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
   if (!isValidDate(from)) {
@@ -546,6 +567,7 @@ app.get('/api/orders/warehouses', async (req, res) => {
     const pool = await getPool();
     const request = pool.request().input('dateFrom', sql.Date, from).input('dateTo', sql.Date, toDate);
     if (searchTerm) request.input('q', sql.NVarChar, `%${searchTerm}%`);
+    const scopeClause = warehouseScopeClause(request, req.user);
     const result = await request.query(`
         SELECT ct.WarehouseCode, w.Name AS WarehouseName, COUNT(DISTINCT h.DocNo) AS cnt
         FROM B30AccDocSales ct
@@ -559,6 +581,7 @@ app.get('/api/orders/warehouses', async (req, res) => {
           ${chayCuaClause}
           ${statusClause}
           ${shippingClause}
+          ${scopeClause}
         GROUP BY ct.WarehouseCode, w.Name
         ORDER BY cnt DESC
       `);
@@ -576,18 +599,18 @@ app.get('/api/orders/warehouses', async (req, res) => {
 });
 
 // GET /api/orders/find/:docNo -> tra cứu 1 đơn hàng đầy đủ (dạng Order) theo mã, dùng cho quét mã vạch
-app.get('/api/orders/find/:docNo', async (req, res) => {
+app.get('/api/orders/find/:docNo', requireAuth, async (req, res) => {
   const { docNo } = req.params;
 
   try {
     const pool = await getPool();
-    const result = await pool
-      .request()
-      .input('docNo', sql.NVarChar, docNo)
-      .query(`
+    const request = pool.request().input('docNo', sql.NVarChar, docNo);
+    const scopeClause = warehouseScopeClause(request, req.user);
+    const result = await request.query(`
         SELECT ${ORDER_ROWS_SELECT}
         WHERE h.DocNo = @docNo
           AND h.DocCode IN (${DOC_CODES.map((_, i) => `'${DOC_CODES[i]}'`).join(',')})
+          ${scopeClause}
         ORDER BY ct.ItemCode;
       `);
 
@@ -674,6 +697,21 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
     if (!header) {
       await tx.rollback();
       return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
+    }
+
+    if (req.user.warehouseScope) {
+      const scopeCheckReq = new sql.Request(tx).input('stt', sql.VarChar, header.Stt);
+      scopeCheckReq.input('whScope', sql.NVarChar, `%${req.user.warehouseScope}%`);
+      const scopeCheck = await scopeCheckReq.query(`
+        SELECT TOP 1 1 AS ok
+        FROM B30AccDocSales sc
+        LEFT JOIN B20Warehouse scw ON scw.Code = sc.WarehouseCode
+        WHERE sc.Stt = @stt AND scw.Name COLLATE Vietnamese_CI_AI LIKE @whScope COLLATE Vietnamese_CI_AI
+      `);
+      if (scopeCheck.recordset.length === 0) {
+        await tx.rollback();
+        return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
+      }
     }
 
     // Chặn chuyển sang "Đã đóng gói" nếu đơn đang ở trạng thái "Cần sửa đơn" (DocStatus=1) hoặc

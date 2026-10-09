@@ -125,7 +125,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
     if (reset) { setLoading(true); setError(''); } else { setLoadingMore(true); }
     try {
       const data = await fetchOrders(
-        toISODate(dateFrom), toISODate(dateTo), pageNum, PAGE_SIZE, filter, debouncedSearch, chayCuaOnly, shipping, warehouse
+        toISODate(dateFrom), toISODate(dateTo), pageNum, PAGE_SIZE, session.token, filter, debouncedSearch, chayCuaOnly, shipping, warehouse
       );
       if (myGen !== genRef.current) return; // kết quả cũ (bộ lọc đã đổi), bỏ qua
       setOrders((prev) => {
@@ -145,7 +145,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
   async function loadSummary() {
     try {
-      const c = await fetchOrderSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly, shipping, warehouse);
+      const c = await fetchOrderSummary(toISODate(dateFrom), toISODate(dateTo), session.token, debouncedSearch, chayCuaOnly, shipping, warehouse);
       setCounts(c);
     } catch {
       // im lặng bỏ qua lỗi tổng quan, không chặn danh sách chính
@@ -154,7 +154,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
   async function loadShippingSummary() {
     try {
-      const c = await fetchShippingSummary(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly, filter, warehouse);
+      const c = await fetchShippingSummary(toISODate(dateFrom), toISODate(dateTo), session.token, debouncedSearch, chayCuaOnly, filter, warehouse);
       setShippingCounts(c);
     } catch {
       // im lặng bỏ qua
@@ -163,7 +163,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
 
   async function loadWarehouses() {
     try {
-      const w = await fetchWarehouses(toISODate(dateFrom), toISODate(dateTo), debouncedSearch, chayCuaOnly, filter, shipping);
+      const w = await fetchWarehouses(toISODate(dateFrom), toISODate(dateTo), session.token, debouncedSearch, chayCuaOnly, filter, shipping);
       setWarehouses(w);
     } catch {
       // im lặng bỏ qua
@@ -239,7 +239,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
   async function handleScanned(docNo: string) {
     setScannerOpen(false);
     try {
-      const order = await findOrder(docNo);
+      const order = await findOrder(docNo, session.token);
 
       if (order.status === 'huy') {
         showToast(`${docNo} đã bị hủy, không thể nhặt kho`);

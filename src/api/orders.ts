@@ -24,6 +24,7 @@ export async function fetchOrders(
   to: string,
   page: number,
   pageSize: number,
+  token: string,
   status?: string | null,
   q?: string,
   chayCua?: boolean,
@@ -36,7 +37,9 @@ export async function fetchOrders(
   if (chayCua) params.set('chayCua', '1');
   if (shipping) params.set('shipping', shipping);
   if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/list?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/list?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải đơn hàng (${res.status})`);
@@ -54,14 +57,16 @@ export interface StatusCounts {
 }
 
 export async function fetchOrderSummary(
-  from: string, to: string, q?: string, chayCua?: boolean, shipping?: ShippingFilter, warehouse?: string[]
+  from: string, to: string, token: string, q?: string, chayCua?: boolean, shipping?: ShippingFilter, warehouse?: string[]
 ): Promise<StatusCounts> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
   if (shipping) params.set('shipping', shipping);
   if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/summary?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/summary?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải tổng quan (${res.status})`);
@@ -77,14 +82,16 @@ export interface ShippingCounts {
 }
 
 export async function fetchShippingSummary(
-  from: string, to: string, q?: string, chayCua?: boolean, status?: string | null, warehouse?: string[]
+  from: string, to: string, token: string, q?: string, chayCua?: boolean, status?: string | null, warehouse?: string[]
 ): Promise<ShippingCounts> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
   if (status) params.set('status', status);
   if (warehouse && warehouse.length > 0) params.set('warehouse', warehouse.join(','));
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/shipping-summary?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/shipping-summary?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải tổng quan vận chuyển (${res.status})`);
@@ -100,14 +107,16 @@ export interface WarehouseOption {
 }
 
 export async function fetchWarehouses(
-  from: string, to: string, q?: string, chayCua?: boolean, status?: string | null, shipping?: ShippingFilter
+  from: string, to: string, token: string, q?: string, chayCua?: boolean, status?: string | null, shipping?: ShippingFilter
 ): Promise<WarehouseOption[]> {
   const params = new URLSearchParams({ from, to });
   if (q) params.set('q', q);
   if (chayCua) params.set('chayCua', '1');
   if (status) params.set('status', status);
   if (shipping) params.set('shipping', shipping);
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/warehouses?${params.toString()}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/warehouses?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tải danh sách kho (${res.status})`);
@@ -140,8 +149,10 @@ export async function updateSlaSettings(minutes: number, token: string): Promise
   return data.slaDeliveryMinutes;
 }
 
-export async function findOrder(docNo: string): Promise<Order> {
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/find/${encodeURIComponent(docNo)}`);
+export async function findOrder(docNo: string, token: string): Promise<Order> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/orders/find/${encodeURIComponent(docNo)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Lỗi tra cứu đơn hàng (${res.status})`);

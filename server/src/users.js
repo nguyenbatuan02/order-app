@@ -17,7 +17,10 @@ const RAW_USERS = [
   { ma: 'HUUNGUYEN', mat_khau: '123456', ten: 'Nguyễn Văn Hữu', quyen: 'user' },
   { ma: 'ANTHINH', mat_khau: '123456', ten: 'An Thịnh', quyen: 'user' },
   { ma: 'TUNGLE', mat_khau: '123456', ten: 'Lê Tùng', quyen: 'user' },
-  { ma: 'KHOCDD', mat_khau: '123456', ten: 'Kho Chương Dương Độ', quyen: 'user' },
+  // warehouseScope: chuỗi khớp theo kiểu SQL LIKE với tên kho (B20Warehouse.Name) — tài khoản
+  // này chỉ thấy đơn có ít nhất 1 dòng sản phẩm thuộc kho có tên chứa chuỗi này. Để trống/bỏ
+  // field này nếu tài khoản được xem tất cả các kho.
+  { ma: 'KHOCDD', mat_khau: '123456', ten: 'Kho Chương Dương Độ', quyen: 'user', warehouseScope: 'Chương Dương' },
 ];
 
 const USERS = RAW_USERS.map((u) => ({
@@ -26,6 +29,7 @@ const USERS = RAW_USERS.map((u) => ({
   passwordHash: bcrypt.hashSync(u.mat_khau, 10),
   ten: u.ten,
   quyen: u.quyen,
+  warehouseScope: u.warehouseScope || null,
 }));
 
 function findUser(ma) {
@@ -37,7 +41,7 @@ function verifyPassword(ma, password) {
   const user = findUser(ma);
   if (!user) return null;
   if (!bcrypt.compareSync(password, user.passwordHash)) return null;
-  return { ma: user.ma, ten: user.ten, quyen: user.quyen };
+  return { ma: user.ma, ten: user.ten, quyen: user.quyen, warehouseScope: user.warehouseScope };
 }
 
 module.exports = { findUser, verifyPassword };
