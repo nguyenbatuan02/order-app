@@ -16,6 +16,7 @@ const RAW_USERS = [
   { ma: 'HOADANG', mat_khau: '123456', ten: 'Đặng Quỳnh Hoa', quyen: 'user' },
   { ma: 'HUUNGUYEN', mat_khau: '123456', ten: 'Nguyễn Văn Hữu', quyen: 'user' },
   { ma: 'ANTHINH', mat_khau: '123456', ten: 'An Thịnh', quyen: 'user' },
+  { ma: 'TUNGLE', mat_khau: '123456', ten: 'Lê Tùng', quyen: 'user' },
   { ma: 'KHOCDD', mat_khau: '123456', ten: 'Kho Chương Dương Độ', quyen: 'user' },
 ];
 
