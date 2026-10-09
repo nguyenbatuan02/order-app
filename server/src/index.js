@@ -699,19 +699,24 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
       return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
     }
 
+    // itemsInScope: khi tài khoản bị giới hạn theo kho, chỉ những dòng sản phẩm thuộc đúng kho
+    // đó mới được phép ghi (phòng trường hợp client gửi lên cả dòng ngoài phạm vi). null nghĩa
+    // là không giới hạn (áp dụng mọi dòng client gửi).
+    let itemsInScope = null;
     if (req.user.warehouseScope) {
       const scopeCheckReq = new sql.Request(tx).input('stt', sql.VarChar, header.Stt);
       scopeCheckReq.input('whScope', sql.NVarChar, `%${req.user.warehouseScope}%`);
-      const scopeCheck = await scopeCheckReq.query(`
-        SELECT TOP 1 1 AS ok
+      const scopeRows = await scopeCheckReq.query(`
+        SELECT sc.RowId, sc.ItemCode
         FROM B30AccDocSales sc
         LEFT JOIN B20Warehouse scw ON scw.Code = sc.WarehouseCode
         WHERE sc.Stt = @stt AND scw.Name COLLATE Vietnamese_CI_AI LIKE @whScope COLLATE Vietnamese_CI_AI
       `);
-      if (scopeCheck.recordset.length === 0) {
+      if (scopeRows.recordset.length === 0) {
         await tx.rollback();
         return res.status(404).json({ error: `Không tìm thấy đơn hàng ${docNo}` });
       }
+      itemsInScope = new Set(scopeRows.recordset.map((r) => `${r.RowId}::${r.ItemCode}`));
     }
 
     // Chặn chuyển sang "Đã đóng gói" nếu đơn đang ở trạng thái "Cần sửa đơn" (DocStatus=1) hoặc
@@ -729,18 +734,18 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
           FROM B30AccDocSales sct
           LEFT JOIN B20Item si ON si.Code = sct.ItemCode
           WHERE sct.Stt = @stt
-            AND sct.QuantityWarehouse IS NOT NULL
-            AND sct.QuantityWarehouse < sct.QuantityRequest
+            AND (sct.QuantityWarehouse IS NULL OR sct.QuantityWarehouse < sct.QuantityRequest)
             AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
         `);
       if (shortageResult.recordset.length > 0) {
         await tx.rollback();
-        return res.status(400).json({ error: 'Đơn còn thiếu hàng (Cần sửa đơn) — chưa thể chuyển sang Đã đóng gói' });
+        return res.status(400).json({ error: 'Đơn còn thiếu hàng hoặc chưa được nhặt hết (còn kho khác chưa xác nhận) — chưa thể chuyển sang Đã đóng gói' });
       }
     }
 
     for (const item of items) {
       if (!item.rowId || !item.itemCode) continue;
+      if (itemsInScope && !itemsInScope.has(`${item.rowId}::${item.itemCode}`)) continue;
       const request = new sql.Request(tx)
         .input('stt', sql.VarChar, header.Stt)
         .input('itemCode', sql.VarChar, item.itemCode)
@@ -767,6 +772,9 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
     //   -> DocStatus=1 (Cần sửa đơn) để Sale xử lý.
     let finalDocStatus = cfg.docStatus;
     if (step === 'kho') {
+      // QuantityWarehouse IS NULL (chưa dòng nào xác nhận, kể cả thuộc kho khác chưa đụng tới)
+      // cũng tính là "chưa đủ" — đơn chỉ chuyển "Đã đủ hàng" khi MỌI kho liên quan đều đã xác
+      // nhận xong, quan trọng với đơn có hàng ở nhiều kho do nhiều nhóm khác nhau xử lý.
       const shortageResult = await new sql.Request(tx)
         .input('stt', sql.VarChar, header.Stt)
         .query(`
@@ -774,8 +782,7 @@ app.post('/api/orders/:docNo/step', requireAuth, async (req, res) => {
           FROM B30AccDocSales sct
           LEFT JOIN B20Item si ON si.Code = sct.ItemCode
           WHERE sct.Stt = @stt
-            AND sct.QuantityWarehouse IS NOT NULL
-            AND sct.QuantityWarehouse < sct.QuantityRequest
+            AND (sct.QuantityWarehouse IS NULL OR sct.QuantityWarehouse < sct.QuantityRequest)
             AND ISNULL(si.ItemCatgCode, '') NOT IN ('DICHVU', 'HT-DICHVU')
         `);
       const hasShortage = shortageResult.recordset.length > 0;

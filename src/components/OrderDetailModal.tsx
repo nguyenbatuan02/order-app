@@ -19,6 +19,7 @@ interface Props {
   onCompleteSimple: (id: string, items: ItemQty[], diffs: Diff[], reportShortage: boolean) => void;
   toastMsg: string;
   toastShow: boolean;
+  warehouseScope: string | null;
 }
 
 function hasChaycua(o: Order) { return o.items.some((it) => it.type === 'chaycua'); }
@@ -32,7 +33,7 @@ function nextStepLabel(o: Order): string {
   return 'hoàn thành';
 }
 
-export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple, toastMsg, toastShow }: Props) {
+export default function OrderDetailModal({ order, saving, onClose, onCompleteSimple, toastMsg, toastShow, warehouseScope }: Props) {
   const [qtys, setQtys] = useState<number[]>([]);
   // true = "Đủ" (khóa ô nhập, tự dùng SL yêu cầu) — false = "Thiếu" (mở ô nhập, kho tự gõ SL thực).
   const [sufficient, setSufficient] = useState<boolean[]>([]);
@@ -69,6 +70,11 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
   // chạy cửa coi như đã về đủ (nếu chưa đủ thì đơn không thể qua khỏi bước nhặt kho), nên bộ
   // phận đóng gói/vận chuyển vẫn cần tick bình thường như hàng nội bộ.
   const isPickingStep = order.status === 'suachờ' || order.docStatus <= 1;
+  // Tài khoản bị giới hạn theo kho (warehouseScope) chỉ được thao tác dòng sản phẩm thuộc đúng
+  // kho đó ở bước nhặt kho — các dòng thuộc kho khác vẫn hiện để biết đơn còn gì, nhưng khoá lại,
+  // chờ nhóm phụ trách kho đó tự xác nhận riêng.
+  const isOutOfScope = (it: OrderItem) =>
+    !!warehouseScope && isPickingStep && !(it.warehouseName && it.warehouseName.includes(warehouseScope));
 
   function toggleSufficient(i: number) {
     setSufficient((prev) => {
@@ -92,13 +98,15 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   const renderItem = (it: OrderItem, idx: number) => {
     const isChaycua = it.type === 'chaycua';
-    // Khoá tick chỉ áp dụng cho hàng chạy cửa ở đúng bước nhặt kho — bộ phận nhặt đơn không xử
-    // lý/xác nhận đủ hàng chạy cửa qua app này (việc đó diễn ra bên Bravo: mua ngoài + nhập kho).
-    // Từ bước đóng gói/vận chuyển trở đi, hàng chạy cửa tick bình thường như hàng nội bộ.
-    const isLocked = isChaycua && isPickingStep;
+    const outOfScope = isOutOfScope(it);
+    // Khoá tick: hàng chạy cửa ở đúng bước nhặt kho (bộ phận nhặt đơn không xác nhận đủ hàng
+    // chạy cửa qua app này — việc đó diễn ra bên Bravo), hoặc hàng thuộc kho ngoài phạm vi tài
+    // khoản (nhóm khác phụ trách, tự xác nhận riêng).
+    const isLocked = (isChaycua && isPickingStep) || outOfScope;
     const isSufficient = isLocked ? false : sufficient[idx];
+    const lockLabel = outOfScope ? 'Kho khác' : 'Chạy cửa';
     return (
-      <View style={[styles.itemLine, isChaycua ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
+      <View style={[styles.itemLine, outOfScope ? styles.itemLineMuted : isChaycua ? styles.itemLineAmber : styles.itemLineTeal]} key={idx}>
         <Text style={styles.shelfText}>Kệ: {it.shelf}</Text>
         <View style={styles.itemBottomRow}>
           <Pressable
@@ -106,13 +114,17 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
             onPress={() => !isLocked && toggleSufficient(idx)}
             disabled={isLocked}
           >
-            <Ionicons
-              name={isSufficient ? 'checkbox' : 'square-outline'}
-              size={22}
-              color={isSufficient ? colors.green : colors.amber}
-            />
-            <Text style={[styles.checkLabel, { color: isSufficient ? colors.greenText : colors.amberText }]}>
-              {isLocked ? 'Chạy cửa' : isSufficient ? 'Đủ' : 'Thiếu'}
+            {outOfScope ? (
+              <Ionicons name="lock-closed-outline" size={20} color={colors.text3} />
+            ) : (
+              <Ionicons
+                name={isSufficient ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={isSufficient ? colors.green : colors.amber}
+              />
+            )}
+            <Text style={[styles.checkLabel, { color: outOfScope ? colors.text3 : isSufficient ? colors.greenText : colors.amberText }]}>
+              {isLocked ? lockLabel : isSufficient ? 'Đủ' : 'Thiếu'}
             </Text>
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -161,6 +173,13 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
 
   const stepLabel = nextStepLabel(order);
 
+  // Chỉ gửi lên server các dòng trong phạm vi kho của tài khoản — không đụng tới dòng thuộc kho
+  // khác (nhóm phụ trách kho đó tự xác nhận riêng ở lượt của họ).
+  const submitItems: ItemQty[] = order.items
+    .map((it, i) => ({ it, i }))
+    .filter((x) => !isOutOfScope(x.it))
+    .map(({ it, i }) => ({ rowId: it.rowId, itemCode: it.itemCode, quantity: qtys[i] ?? it.req }));
+
   let completeBlock;
   if (canComplete) {
     completeBlock = (
@@ -187,7 +206,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
                 disabled={saving}
                 onPress={() => onCompleteSimple(
                   order.id,
-                  order.items.map((it, i) => ({ rowId: it.rowId, itemCode: it.itemCode, quantity: qtys[i] ?? it.req })),
+                  submitItems,
                   activeDiffs,
                   true
                 )}
@@ -201,7 +220,7 @@ export default function OrderDetailModal({ order, saving, onClose, onCompleteSim
               disabled={saving}
               onPress={() => onCompleteSimple(
                 order.id,
-                order.items.map((it, i) => ({ rowId: it.rowId, itemCode: it.itemCode, quantity: qtys[i] ?? it.req })),
+                submitItems,
                 activeDiffs,
                 false
               )}
@@ -327,6 +346,7 @@ const styles = StyleSheet.create({
   itemBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   itemLineTeal: { borderLeftColor: colors.teal },
   itemLineAmber: { borderLeftColor: colors.amber },
+  itemLineMuted: { borderLeftColor: colors.borderStrong, opacity: 0.6 },
   itemName: { fontSize: 13.5, fontWeight: '600', color: colors.text },
   itemSub: { fontSize: 12, color: colors.text3, marginTop: 1 },
   shelfText: { fontSize: 16, fontWeight: '800', color: colors.text },

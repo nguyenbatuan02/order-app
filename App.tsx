@@ -316,6 +316,7 @@ function MainApp({ session, onLogout }: { session: Session; onLogout: () => void
             onCompleteSimple={handleCompleteSimple}
             toastMsg={toastMsg}
             toastShow={toastShow}
+            warehouseScope={session.user.warehouseScope ?? null}
           />
           <BarcodeScannerModal
             visible={scannerOpen}

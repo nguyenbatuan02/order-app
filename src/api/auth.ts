@@ -10,6 +10,7 @@ export interface AuthUser {
   ma: string;
   ten: string;
   quyen: string;
+  warehouseScope?: string | null;
 }
 
 export interface Session {
