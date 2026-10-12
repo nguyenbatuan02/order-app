@@ -139,21 +139,19 @@ function statusFilterClause(status) {
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
-// Luôn quy đổi theo giờ Việt Nam (UTC+7) thay vì dùng getHours()/getDate() — chúng lấy theo múi
-// giờ hệ điều hành của server, mà container chạy VPS mặc định là UTC nên sẽ lệch 7 tiếng.
-function toVN(dt) {
-  return new Date(new Date(dt).getTime() + 7 * 60 * 60 * 1000);
-}
-
+// QUAN TRỌNG: SQL Server (GETDATE()) đã trả về đúng giờ Việt Nam sẵn (đã verify trực tiếp —
+// GETDATE() khớp y hệt giờ thực tế VN tại thời điểm kiểm tra), KHÔNG phải UTC. driver mssql chỉ
+// gắn nhãn "Z"/UTC lên các con số đó khi tạo đối tượng Date trong JS, bản thân giá trị số
+// (giờ/phút) đã đúng VN rồi — nên đọc thẳng bằng getUTC*, TUYỆT ĐỐI không cộng thêm lệch múi giờ.
 function fmtTime(dt) {
   if (!dt) return '';
-  const d = toVN(dt);
+  const d = new Date(dt);
   return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
 
 function fmtDate(dt) {
   if (!dt) return '';
-  const d = toVN(dt);
+  const d = new Date(dt);
   return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}`;
 }
 
@@ -297,7 +295,11 @@ function applySla(order) {
     order.slaMinutes = minutes;
     order.slaStatus = minutes <= thresholdMinutes ? 'on_time' : 'late';
   } else {
-    const minutesSoFar = Math.round((Date.now() - new Date(createdAt)) / 60000);
+    // Date.now() là epoch thật, còn createdAt lấy từ DB bị driver gắn nhãn "UTC" sai lên giờ VN
+    // thật (xem ghi chú ở fmtTime) — nên khi so với "hiện tại" phải quy "hiện tại" về cùng kiểu
+    // nhãn đó (cộng 7 tiếng vào Date.now()) thì hiệu số phút mới đúng thực tế.
+    const fakeNowSameLabeling = Date.now() + 7 * 60 * 60 * 1000;
+    const minutesSoFar = Math.round((fakeNowSameLabeling - new Date(createdAt)) / 60000);
     order.slaMinutes = minutesSoFar;
     order.slaStatus = minutesSoFar > thresholdMinutes ? 'at_risk' : 'in_progress';
   }
