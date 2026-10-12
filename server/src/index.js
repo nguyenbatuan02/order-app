@@ -278,8 +278,14 @@ function rowsToOrders(rows) {
     for (const stage of ['xacnhan', 'donggoi', 'dieuvan']) {
       const c = candidates[stage];
       if (!c) continue;
-      order.log.push({ stage, person: c.person, time: fmtDateTime(c.rawTime) });
-      if (stage === 'dieuvan') order._deliveredAtRaw = c.rawTime;
+      // Có tên người -> app này ghi thật bằng GETDATE() (giờ VN). Không có tên người -> Bravo tự
+      // điền mặc định (thường = CreatedAt) -> mang quy ước UTC thật như Bravo, không phải VN.
+      const time = c.person ? fmtDateTime(c.rawTime) : fmtDateTimeBravo(c.rawTime);
+      order.log.push({ stage, person: c.person, time });
+      if (stage === 'dieuvan') {
+        order._deliveredAtRaw = c.rawTime;
+        order._deliveredAtIsGhost = !c.person;
+      }
     }
     order.items.sort((a, b) => a.warehouseName.localeCompare(b.warehouseName, 'vi'));
     applySla(order);
@@ -288,15 +294,18 @@ function rowsToOrders(rows) {
 }
 
 // SLA giao tới khách: tính từ lúc tiếp nhận đơn (CreatedAt, Bravo ghi = UTC thật) đến lúc hoàn
-// tất vận chuyển (Thoigianvanchuyen, server này ghi bằng GETDATE() = giờ VN thật). Hai nguồn này
-// lệch nhãn nhau 7 tiếng (xem ghi chú ở fmtTime/fmtTimeBravo) — phải quy về CÙNG một kiểu trước
-// khi trừ, nếu không hiệu số sẽ sai lệch 7 tiếng.
+// tất vận chuyển (Thoigianvanchuyen). Thoigianvanchuyen chỉ là giờ VN thật khi CÓ người xác nhận
+// thật qua app (_deliveredAtIsGhost=false) — nếu Bravo tự điền mặc định (không ai xác nhận,
+// _deliveredAtIsGhost=true) thì nó mang quy ước UTC thật giống CreatedAt. Phải quy 2 vế về cùng
+// 1 kiểu trước khi trừ, nếu không hiệu số sẽ sai lệch 7 tiếng (xem ghi chú fmtTime/fmtTimeBravo).
 function applySla(order) {
   const thresholdMinutes = settings.slaDeliveryMinutes;
   const createdAt = order._createdAtRaw; // UTC thật
-  const deliveredAt = order._deliveredAtRaw; // giờ VN thật, bị gắn nhãn UTC sai
+  const deliveredAt = order._deliveredAtRaw;
+  const deliveredAtIsGhost = order._deliveredAtIsGhost;
   delete order._createdAtRaw;
   delete order._deliveredAtRaw;
+  delete order._deliveredAtIsGhost;
 
   order.slaThresholdMinutes = thresholdMinutes;
   if (!createdAt) {
@@ -305,8 +314,11 @@ function applySla(order) {
     return;
   }
   if (deliveredAt) {
-    // Trừ 7h khỏi deliveredAt để quy nó về cùng kiểu UTC thật như createdAt.
-    const deliveredAtTrueUtc = new Date(deliveredAt).getTime() - 7 * 60 * 60 * 1000;
+    // Ghost (Bravo tự điền, chưa ai xác nhận thật) -> đã là UTC thật, trừ thẳng.
+    // Thật (app ghi bằng GETDATE()) -> giờ VN thật, phải trừ 7h để quy về UTC thật như createdAt.
+    const deliveredAtTrueUtc = deliveredAtIsGhost
+      ? new Date(deliveredAt).getTime()
+      : new Date(deliveredAt).getTime() - 7 * 60 * 60 * 1000;
     const minutes = Math.round((deliveredAtTrueUtc - new Date(createdAt).getTime()) / 60000);
     order.slaMinutes = minutes;
     order.slaStatus = minutes <= thresholdMinutes ? 'on_time' : 'late';
