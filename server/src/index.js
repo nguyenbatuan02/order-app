@@ -139,10 +139,13 @@ function statusFilterClause(status) {
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
-// QUAN TRỌNG: SQL Server (GETDATE()) đã trả về đúng giờ Việt Nam sẵn (đã verify trực tiếp —
-// GETDATE() khớp y hệt giờ thực tế VN tại thời điểm kiểm tra), KHÔNG phải UTC. driver mssql chỉ
-// gắn nhãn "Z"/UTC lên các con số đó khi tạo đối tượng Date trong JS, bản thân giá trị số
-// (giờ/phút) đã đúng VN rồi — nên đọc thẳng bằng getUTC*, TUYỆT ĐỐI không cộng thêm lệch múi giờ.
+// QUAN TRỌNG — 2 "nguồn ghi giờ" khác nhau trong cùng DB dùng 2 quy ước khác nhau, đã verify
+// trực tiếp bằng dữ liệu thật (đơn HT121026-005, đối chiếu với Bravo desktop):
+//  - CreatedAt (Bravo tự ghi lúc tạo đơn) là UTC THẬT -> phải cộng +7h mới ra đúng giờ VN.
+//  - Thoigiankho/Thoigiandonggoi/Thoigianvanchuyen (server này tự ghi bằng GETDATE() ngay trên
+//    SQL Server khi xác nhận từng bước) đã là giờ VN sẵn (GETDATE() trên SQL Server này trả về
+//    giờ VN, không phải UTC) -> KHÔNG được cộng thêm, đọc thẳng.
+// Nhầm 2 loại này với nhau là lý do gây lệch giờ các lần trước — luôn chọn đúng hàm bên dưới.
 function fmtTime(dt) {
   if (!dt) return '';
   const d = new Date(dt);
@@ -159,6 +162,14 @@ function fmtDateTime(dt) {
   if (!dt) return '';
   return `${fmtTime(dt)} ${fmtDate(dt)}`;
 }
+
+// Dùng riêng cho các mốc do Bravo tự ghi (CreatedAt...) — true UTC, cần quy đổi sang giờ VN.
+function toVNFromBravoUTC(dt) {
+  return new Date(new Date(dt).getTime() + 7 * 60 * 60 * 1000);
+}
+function fmtTimeBravo(dt) { return dt ? fmtTime(toVNFromBravoUTC(dt)) : ''; }
+function fmtDateBravo(dt) { return dt ? fmtDate(toVNFromBravoUTC(dt)) : ''; }
+function fmtDateTimeBravo(dt) { return dt ? fmtDateTime(toVNFromBravoUTC(dt)) : ''; }
 
 const SERVICE_CATG_CODES = ['DICHVU', 'HT-DICHVU'];
 
@@ -205,14 +216,14 @@ function rowsToOrders(rows) {
         status: computeStatus(row.DocStatus),
         docStatus: row.DocStatus,
         addr: row.CustomerAddress || '',
-        time: fmtTime(row.CreatedAt),
+        time: fmtTimeBravo(row.CreatedAt),
         date: fmtDate(row.DocDate),
         shipping: row.Goi_Vc || '',
         shippingLabel: shippingLabel(row.Goi_Vc),
         warehouseCode: row.HeaderWarehouseCode || '',
         warehouseName: row.HeaderWarehouseName || row.HeaderWarehouseCode || '',
         items: [],
-        log: [{ stage: 'tiepnhan', person: '', time: fmtDateTime(row.CreatedAt) }],
+        log: [{ stage: 'tiepnhan', person: '', time: fmtDateTimeBravo(row.CreatedAt) }],
         _createdAtRaw: row.CreatedAt,
         _deliveredAtRaw: null,
       });
@@ -276,11 +287,14 @@ function rowsToOrders(rows) {
   return Array.from(ordersByDoc.values());
 }
 
-// SLA giao tới khách: tính từ lúc tiếp nhận đơn (CreatedAt) đến lúc hoàn tất vận chuyển (Thoigianvanchuyen).
+// SLA giao tới khách: tính từ lúc tiếp nhận đơn (CreatedAt, Bravo ghi = UTC thật) đến lúc hoàn
+// tất vận chuyển (Thoigianvanchuyen, server này ghi bằng GETDATE() = giờ VN thật). Hai nguồn này
+// lệch nhãn nhau 7 tiếng (xem ghi chú ở fmtTime/fmtTimeBravo) — phải quy về CÙNG một kiểu trước
+// khi trừ, nếu không hiệu số sẽ sai lệch 7 tiếng.
 function applySla(order) {
   const thresholdMinutes = settings.slaDeliveryMinutes;
-  const createdAt = order._createdAtRaw;
-  const deliveredAt = order._deliveredAtRaw;
+  const createdAt = order._createdAtRaw; // UTC thật
+  const deliveredAt = order._deliveredAtRaw; // giờ VN thật, bị gắn nhãn UTC sai
   delete order._createdAtRaw;
   delete order._deliveredAtRaw;
 
@@ -291,15 +305,14 @@ function applySla(order) {
     return;
   }
   if (deliveredAt) {
-    const minutes = Math.round((new Date(deliveredAt) - new Date(createdAt)) / 60000);
+    // Trừ 7h khỏi deliveredAt để quy nó về cùng kiểu UTC thật như createdAt.
+    const deliveredAtTrueUtc = new Date(deliveredAt).getTime() - 7 * 60 * 60 * 1000;
+    const minutes = Math.round((deliveredAtTrueUtc - new Date(createdAt).getTime()) / 60000);
     order.slaMinutes = minutes;
     order.slaStatus = minutes <= thresholdMinutes ? 'on_time' : 'late';
   } else {
-    // Date.now() là epoch thật, còn createdAt lấy từ DB bị driver gắn nhãn "UTC" sai lên giờ VN
-    // thật (xem ghi chú ở fmtTime) — nên khi so với "hiện tại" phải quy "hiện tại" về cùng kiểu
-    // nhãn đó (cộng 7 tiếng vào Date.now()) thì hiệu số phút mới đúng thực tế.
-    const fakeNowSameLabeling = Date.now() + 7 * 60 * 60 * 1000;
-    const minutesSoFar = Math.round((fakeNowSameLabeling - new Date(createdAt)) / 60000);
+    // Date.now() là epoch UTC thật, createdAt cũng là UTC thật -> trừ thẳng, không cần quy đổi gì.
+    const minutesSoFar = Math.round((Date.now() - new Date(createdAt).getTime()) / 60000);
     order.slaMinutes = minutesSoFar;
     order.slaStatus = minutesSoFar > thresholdMinutes ? 'at_risk' : 'in_progress';
   }
