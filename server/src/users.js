@@ -15,6 +15,7 @@ const RAW_USERS = [
   { ma: 'CHINHTRAN', mat_khau: '123456', ten: 'Trần Thị Tuyết Chính', quyen: 'user', warehouseScope: 'Chương Dương' },
   { ma: 'HOADANG', mat_khau: '123456', ten: 'Đặng Quỳnh Hoa', quyen: 'user', warehouseScope: 'Chương Dương' },
   { ma: 'HUUNGUYEN', mat_khau: '123456', ten: 'Nguyễn Văn Hữu', quyen: 'user' },
+  { ma: 'ANHBUI', mat_khau: '123456', ten: 'Bùi Văn Anh', quyen: 'user' },
   { ma: 'ANTHINH', mat_khau: '123456', ten: 'An Thịnh', quyen: 'user', warehouseScope: 'Chương Dương' },
   { ma: 'TUNGLE', mat_khau: '123456', ten: 'Lê Tùng', quyen: 'user', warehouseScope: 'Chương Dương' },
   // warehouseScope: chuỗi khớp theo kiểu SQL LIKE với tên kho (B20Warehouse.Name) — tài khoản
